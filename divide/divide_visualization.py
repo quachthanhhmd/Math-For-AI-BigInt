@@ -1,9 +1,14 @@
 from manimlib import *
 
-U_VALUE = '10000' #'5144123122'
-V_VALUE = '55'
+U_VALUE = '8153492' #'5144123122'
+V_VALUE = '299'
 BASE_VALUE = 10
 
+
+
+# WAIT TIME
+WAIT_SCALE = 1
+WAIT_SCALE_D = WAIT_SCALE * 1.2
 
 DIGIT_SYMBOLS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -77,9 +82,6 @@ def safe_highlight(mobj, color=YELLOW, buff=0.06, stroke_width=3):
 
 
 
-# WAIT TIME
-WAIT_SCALE = 0.5
-WAIT_SCALE_D = WAIT_SCALE
 
 def knuth_algorithm_d_steps(u, v, base=10):
     steps = []
@@ -196,7 +198,7 @@ GRID_CELL_H = 0.75
 GRID_FONT_SCALE = 0.7
 LABEL_SCALE = 0.55
 MAIN_LAYOUT_X = 0.0
-MAIN_LAYOUT_Y = -0.2
+MAIN_LAYOUT_Y = -0.7
 LABEL_TO_INDEX_GAP = 0.2
 V_TO_Q_GAP = 0.9
 Q_LABEL_LEFT_GAP = 0.4
@@ -378,23 +380,37 @@ class DivisionScene(Scene):
                 d_formula = None
                 if needs_normalize:
                     status_text = Text(
-                        f"✗ Need normalization (d = {d_val})",
+                        "Need normalization",
                         font_size=18,
                         color=C_HIGHLIGHT_R
                     )
                     status_text.next_to(check_text, DOWN, buff=0.3).set_x(2)
                     self.play(FadeIn(status_text, shift=LEFT * 0.6), run_time=0.7)
-                    self.wait(2 * WAIT_SCALE)
+                    self.wait(0.5 * WAIT_SCALE)
 
-                    # ── Phase 3: Calculate d and show formula ────────────────
-                    d_formula = Tex(
-                        rf"\text{{D1: }}d = \left\lfloor \frac{{B}}{{v_{{n-1}} + 1}} \right\rfloor = \left\lfloor \frac{{{base_val}}}{{{v_msb} + 1}} \right\rfloor = {d_val}",
-                        color=C_FORMULA
-                    ).scale(0.65)
-                    d_formula.next_to(status_text, DOWN, buff=0.6).set_x(2)
+                    # ── Phase 3: Calculate d and show formula step-by-step ───
+                    denom_sum = v_msb + 1
+                    d_formula_title = Tex(r"\text{D1: Calculate multiplier } d \text{ to scale up } V", color=C_DIM).scale(0.65)
+                    d_formula_1 = Tex(r"d = \left\lfloor \frac{B}{v_{n-1} + 1} \right\rfloor", color=C_FORMULA).scale(0.7)
+                    d_formula_2 = Tex(rf"= \left\lfloor \frac{{{base_val}}}{{{v_msb} + 1}} \right\rfloor", color=C_FORMULA).scale(0.7)
+                    d_formula_3 = Tex(rf"= \left\lfloor \frac{{{base_val}}}{{{denom_sum}}} \right\rfloor", color=C_FORMULA).scale(0.7)
+                    d_formula_4 = Tex(rf"= {d_val}", color=C_HIGHLIGHT_Y).scale(0.75)
 
-                    self.play(FadeIn(d_formula, shift=UP * 0.2), run_time=0.8)
-                    self.wait(2 * WAIT_SCALE)
+                    d_calc_group = VGroup(d_formula_1, d_formula_2, d_formula_3, d_formula_4).arrange(RIGHT, buff=0.15)
+                    d_full_group = VGroup(d_formula_title, d_calc_group).arrange(DOWN, buff=0.25)
+                    d_full_group.next_to(status_text, DOWN, buff=0.6).set_x(2)
+                    d_formula = d_full_group  # for later FadeOut
+
+                    self.play(FadeIn(d_formula_title, shift=UP * 0.1), run_time=0.5)
+                    self.play(FadeIn(d_formula_1, shift=UP * 0.1), run_time=0.6)
+                    self.wait(0.5)
+                    self.play(FadeIn(d_formula_2, shift=LEFT * 0.1), run_time=0.5)
+                    self.wait(0.5)
+                    self.play(FadeIn(d_formula_3, shift=LEFT * 0.1), run_time=0.5)
+                    self.wait(0.5)
+                    self.play(FadeIn(d_formula_4, shift=LEFT * 0.1), run_time=0.7)
+
+                    self.wait(2.2 * WAIT_SCALE)
                     self.play(FadeOut(VGroup(check_text, status_text, d_formula)), run_time=0.5)
                 else:
                     self.wait(0.8 * WAIT_SCALE)
@@ -568,14 +584,17 @@ class DivisionScene(Scene):
                 window_display.set_x(self.step_badge.get_x())
 
                 # Formula: ⌊ numerator / v_first ⌋ = q_hat
+                d3_numerator = Tex(str(step["numerator_str"])).set_color(C_GRID_U)
+                d3_denominator = Tex(digit_to_symbol(step["v_val_first"])).set_color(C_GRID_V)
+                d3_frac_line = Line(LEFT, RIGHT, color=C_FORMULA).set_width(max(d3_numerator.get_width(), d3_denominator.get_width()) + 0.2)
+                d3_frac = VGroup(d3_numerator, d3_frac_line, d3_denominator).arrange(DOWN, buff=0.1)
+
                 eq = VGroup(
                     Tex(r"\hat{q}").set_color(C_GRID_Q),
                     Tex(r"=").set_color(C_FORMULA),
-                    Tex(r"\lfloor").set_color(C_FORMULA),
-                    Tex(str(step["numerator_str"])).set_color(C_GRID_U),
-                    Tex(r"/").set_color(C_FORMULA),
-                    Tex(digit_to_symbol(step["v_val_first"])).set_color(C_GRID_V),
-                    Tex(r"\rfloor").set_color(C_FORMULA),
+                    Tex(r"\lfloor\ ").set_color(C_FORMULA),
+                    d3_frac,
+                    Tex(r"\ \rfloor").set_color(C_FORMULA),
                     Tex(r"=").set_color(C_FORMULA),
                     Tex(digit_to_symbol(step["q_hat"])).set_color(C_GRID_Q),
                 ).arrange(RIGHT, buff=0.15).scale(0.85)
@@ -587,7 +606,7 @@ class DivisionScene(Scene):
 
                 # Generic formula
                 new_gen = Tex(
-                    r"\text{D3: }\hat{q} = \min( \lfloor u_{j+n} \cdot B + u_{j+n-1} / v_{n-1} \rfloor ,\; B-1 )",
+                    r"\text{D3: }\hat{q} = \min\left( \left\lfloor \frac{u_{j+n} \cdot B + u_{j+n-1}}{v_{n-1}} \right\rfloor ,\; B-1 \right)",
                     color=C_FORMULA,
                     tex_to_color_map={
                         r"\hat{q}": C_GRID_Q,
@@ -595,7 +614,7 @@ class DivisionScene(Scene):
                         r"u_{j+n-1}": C_GRID_U,
                         r"v_{n-1}": C_GRID_V,
                     }
-                ).scale(0.5)
+                ).scale(0.65)
                 new_gen.next_to(eq, DOWN, buff=0.15)
                 new_gen.set_x(self.step_badge.get_x())
 
@@ -630,9 +649,9 @@ class DivisionScene(Scene):
                 # Highlight exactly 2 cells for D3.
                 d3_highlights = [safe_highlight(cell, color=C_HIGHLIGHT_Y) for cell in d3_cells]
 
-                anim_u_num = TransformFromCopy(VGroup(u_cells[u_vis_1][-1], u_cells[u_vis_2][-1]), eq[3])
-                anim_v_den = TransformFromCopy(v_cells[v_vis][-1], eq[5])
-                rest_eq = VGroup(eq[0], eq[1], eq[2], eq[4], eq[6], eq[7], eq[8])
+                anim_u_num = TransformFromCopy(VGroup(u_cells[u_vis_1][-1], u_cells[u_vis_2][-1]), d3_numerator)
+                anim_v_den = TransformFromCopy(v_cells[v_vis][-1], d3_denominator)
+                rest_eq = VGroup(eq[0], eq[1], eq[2], d3_frac_line, eq[4], eq[5], eq[6])
 
                 self.play(
                     *gen_anims,
@@ -649,7 +668,8 @@ class DivisionScene(Scene):
                     FadeIn(rest_eq, shift=UP * 0.2),
                     run_time=0.9,
                 )
-                eq.add(*[eq[3], eq[5]]) # Reattach correctly to VGroup
+                d3_frac.add(d3_numerator, d3_denominator) # Ensure they are formally part of frac 
+                eq.add(d3_frac) # Ensure frac is fully attached to eq
                 gen_formula_mobj = new_gen
                 d3_result_mobj = VGroup(window_display, eq, d3_eq_tag)
                 if new_u_window is not None:
@@ -938,8 +958,8 @@ class DivisionScene(Scene):
                 q_hat_source = None
                 if d4_work_mobj is not None and len(d4_work_mobj) > 1 and len(d4_work_mobj[1]) > 4:
                     q_hat_source = d4_work_mobj[1][4]
-                elif d3_result_mobj is not None and len(d3_result_mobj) > 1 and len(d3_result_mobj[1]) > 8:
-                    q_hat_source = d3_result_mobj[1][8]
+                elif d3_result_mobj is not None and len(d3_result_mobj) > 1 and len(d3_result_mobj[1]) >= 7:
+                    q_hat_source = d3_result_mobj[1][6] # Note: eq has 7 elements now: q_hat, =, \lfloor, frac, \rfloor, =, result
                 if q_hat_source is not None:
                     q_hat_fly_token = q_hat_source.copy()
                     self.add(q_hat_fly_token)
@@ -1159,10 +1179,10 @@ class DivisionScene(Scene):
                 if pre_d7_fade:
                     self.play(*pre_d7_fade, run_time=0.3)
 
-                # ── Phase 2: D8 Unnormalize ───────────────────────────────
+                # ── Phase 2: D8 Unnormalize (Redesigned) ───────────────
                 self.update_step_badge(f"D8  Unnormalize  (d = {d_val})")
 
-                # Clear 3-step D8 guide: take -> divide -> get remainder.
+                # Get the cells corresponding to the last n digits of U_norm
                 rem_source_cells = []
                 for idx in range(n - 1, -1, -1):
                     vis_idx = len(u_cells) - 1 - idx
@@ -1179,60 +1199,78 @@ class DivisionScene(Scene):
                     )
                     rem_window_box.set_fill(C_SURPLUS, opacity=0.12)
 
-                d8_line1 = Text("1) Take the last n digits", font_size=18, color=C_GRID_U)
-                d8_line2 = Text(f"2) Divide by d = {d_val}", font_size=18, color=C_HIGHLIGHT_Y)
-                d8_line3 = Text(f"3) Remainder r = {r_str}", font_size=18, color=C_SURPLUS)
+                # Show title formula
+                unnorm_formula = Tex(
+                    r"\text{D8: }r = \frac{U_{rem}}{d}",
+                    color=C_FORMULA,
+                    tex_to_color_map={
+                        r"r": C_SURPLUS,
+                        r"U_{rem}": C_GRID_U,
+                        r"d": C_HIGHLIGHT_Y,
+                    }
+                ).scale(0.65)
+                unnorm_formula.next_to(self.step_badge, DOWN, buff=0.25)
+                unnorm_formula.set_x(0)
 
-                d8_story = VGroup(d8_line1, d8_line2, d8_line3).arrange(
-                    DOWN, aligned_edge=LEFT, buff=0.07
-                )
-                d8_story.next_to(self.step_badge, DOWN, buff=0.18)
-                d8_story.set_x(self.step_badge.get_x())
+                # Specific computation formula
+                # Note: step["u_norm"] is little-endian. We need to display MSD first.
+                u_norm_display = digits_to_str(step["u_norm"][:n], base_val)[::-1] # digits_to_str returns little-endian string, we need reverse for display
+                rem_digits = step["u_norm"][:n]
+                u_norm_val = digits_le_to_int(rem_digits, base_val)
+                u_norm_display = int_to_base_str(u_norm_val, base_val)
 
+                numerator = Tex(u_norm_display).set_color(C_GRID_U)
+                denominator = Tex(str(d_val)).set_color(C_HIGHLIGHT_Y)
+                frac_line = Line(LEFT, RIGHT, color=C_FORMULA).set_width(max(numerator.get_width(), denominator.get_width()) + 0.2)
+                
+                frac_group = VGroup(numerator, frac_line, denominator).arrange(DOWN, buff=0.1)
+
+                unnorm_eq = VGroup(
+                    Tex(r"r").set_color(C_SURPLUS),
+                    Tex(r"=").set_color(C_FORMULA),
+                    frac_group,
+                    Tex(r"=").set_color(C_FORMULA),
+                    Tex(r_str).set_color(C_SURPLUS),
+                ).arrange(RIGHT, buff=0.15).scale(0.85)
+                unnorm_eq.next_to(unnorm_formula, DOWN, buff=0.25)
+                unnorm_eq.set_x(0)
+                
+                # Align equation parts for sequential reveal
+                eq_left = VGroup(unnorm_eq[0], unnorm_eq[1])
+                eq_u = numerator
+                eq_div = VGroup(frac_line, denominator)
+                eq_res = VGroup(unnorm_eq[3], unnorm_eq[4])
+
+                # Animate:
+                # 1. Fade in the D8 formula title and the empty box
+                self.play(FadeIn(unnorm_formula, shift=UP * 0.1), run_time=0.6)
                 if rem_window_box is not None:
-                    self.play(FadeIn(rem_window_box), run_time=0.25)
-                self.play(FadeIn(d8_line1, shift=UP * 0.05), run_time=0.22)
+                    self.play(FadeIn(rem_window_box), run_time=0.4)
+                self.wait(WAIT_SCALE)
+                
+                # 2. Fade in `r = `
+                self.play(FadeIn(eq_left, shift=RIGHT * 0.1), run_time=0.5)
+                
+                # 3. Pull digits from U grid to form the U_norm_display (numerator)
+                if rem_source_cells:
+                    source_mobs = VGroup(*[c[-1] for c in rem_source_cells])
+                    self.play(TransformFromCopy(source_mobs, eq_u), run_time=0.8)
+                else:
+                    self.play(FadeIn(eq_u), run_time=0.8)
+                self.wait(0.5 * WAIT_SCALE)
+                
+                # 4. Highlight `d` requirement and fade in fraction line & denominator
+                self.play(FadeIn(eq_div, shift=LEFT * 0.1), run_time=0.5)
+                self.wait(WAIT_SCALE)
+                
+                # 5. Show final result 
+                self.play(FadeIn(eq_res, shift=UP * 0.1), run_time=0.6)
                 self.wait(3 * WAIT_SCALE)
-                self.play(FadeIn(d8_line2, shift=UP * 0.05), run_time=0.22)
-                self.wait(3 * WAIT_SCALE)
-                self.play(FadeIn(d8_line3, shift=UP * 0.05), run_time=0.22)
-                self.wait(3 * WAIT_SCALE)
-                fade_items = [d8_story]
+
+                fade_items = [unnorm_formula, unnorm_eq]
                 if rem_window_box is not None:
                     fade_items.append(rem_window_box)
-                self.play(FadeOut(VGroup(*fade_items)), run_time=0.22)
-
-                # unnorm_formula = Tex(
-                #     r"\text{D8: }r = U_{norm} \div d",
-                #     color=C_FORMULA,
-                #     tex_to_color_map={
-                #         r"r": C_SURPLUS,
-                #         r"U_{norm}": C_GRID_U,
-                #         r"d": C_HIGHLIGHT_Y,
-                #     }
-                # ).scale(0.6)
-                # unnorm_formula.next_to(self.step_badge, DOWN, buff=BADGE_D7_GAP)
-                # unnorm_formula.set_x(0)
-
-                # Specific computation
-                # u_norm_display = digits_to_str(step["u_norm"][:n], base_val)
-                # unnorm_eq = VGroup(
-                #     Tex(r"r").set_color(C_SURPLUS),
-                #     Tex(r"=").set_color(C_FORMULA),
-                #     Tex(u_norm_display).set_color(C_DIGIT_U),
-                #     Tex(r"\div").set_color(C_FORMULA),
-                #     Tex(str(d_val)).set_color(C_HIGHLIGHT_Y),
-                #     Tex(r"=").set_color(C_FORMULA),
-                #     Tex(r_str).set_color(C_SURPLUS),
-                # ).arrange(RIGHT, buff=0.15).scale(0.75)
-                # unnorm_eq.next_to(unnorm_formula, DOWN, buff=0.1)
-                # unnorm_eq.set_x(0)
-
-                # self.play(FadeIn(unnorm_formula, shift=UP * 0.2), run_time=0.7)
-                # if gen_formula_mobj is not None:
-                #     self.play(FadeOut(gen_formula_mobj), run_time=0.7)
-                # self.play(FadeIn(unnorm_eq, shift=UP * 0.15), run_time=0.7)
-                # self.wait(1.2 * WAIT_SCALE)
+                self.play(FadeOut(VGroup(*fade_items)), run_time=0.4)
 
                 # ── Phase 3: Clear and show final result ──────────────────
                 fade_targets = [side_panel, self.step_badge,
