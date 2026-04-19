@@ -169,19 +169,25 @@ if __name__ == "__main__":
     with open(input_file, "r") as f:
         lines = [line.strip() for line in f if line.strip()]
 
-    if len(lines) < 2:
-        raise ValueError("Input file must contain at least 2 lines: multiplicand and multiplier")
+    test_case_count = 0
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 2:
+            continue
 
-    u_str = lines[0]
-    v_str = lines[1]
+        test_case_count += 1
+        u_str = parts[0]
+        v_str = parts[1]
 
-    u = string_to_little_endian(u_str)
-    v = string_to_little_endian(v_str)
+        u = string_to_little_endian(u_str)
+        v = string_to_little_endian(v_str)
 
-    result = karatsuba_le(u, v, base=10)
-    result_str = little_endian_to_string(result)
+        result = karatsuba_le(u, v, base=10)
+        result_str = little_endian_to_string(result)
 
-    print(f"So thu nhat : {u_str}")
-    print(f"So thu hai : {v_str}")
-    print(f"Tich       : {result_str}")
-    print(f"Thuc te    : {int(u_str) * int(v_str)}")
+        print(f"Test case {test_case_count}:")
+        print(f"  So thu nhat : {u_str}")
+        print(f"  So thu hai : {v_str}")
+        print(f"  Tich       : {result_str}")
+        print(f"  Thuc te    : {int(u_str) * int(v_str)}")
+        print()
