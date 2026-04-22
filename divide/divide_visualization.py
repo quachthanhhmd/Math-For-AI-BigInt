@@ -1,13 +1,13 @@
 from manimlib import *
 
-U_VALUE = '8153492' #'5144123122'
-V_VALUE = '299'
+U_VALUE = '522971' #'5144123122'
+V_VALUE = '398'
 BASE_VALUE = 10
 
 
 
 # WAIT TIME
-WAIT_SCALE = 1
+WAIT_SCALE = 1.1
 WAIT_SCALE_D = WAIT_SCALE * 1.2
 
 DIGIT_SYMBOLS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -114,6 +114,7 @@ def knuth_algorithm_d_steps(u, v, base=10):
         numerator_str = f"{digit_to_symbol(u_norm[j + n])}{digit_to_symbol(u_norm[j + n - 1])}"
         numerator = u_norm[j + n] * base + u_norm[j + n - 1]
         q_hat = numerator // v_norm[-1]
+        raw_q_hat = q_hat
         r_hat = numerator % v_norm[-1]
 
         while q_hat == base or (q_hat * v_norm[-2] > base * r_hat + u_norm[j + n - 2]):
@@ -124,12 +125,14 @@ def knuth_algorithm_d_steps(u, v, base=10):
 
         steps.append({
             "type": "estimate_q_hat", "j": j, "q_hat": q_hat,
+            "raw_q_hat": raw_q_hat,
             "numerator": numerator,
             "numerator_str": numerator_str,
             "window_digits": window_digits,
             "window_value_str": window_value_str,
             "u_idx_1": j + n, "u_idx_2": j + n - 1,
             "v_idx": n - 1, "v_val_first": v_norm[-1],
+            "v_norm": v_norm.copy(),
         })
 
         carry = 0
@@ -589,15 +592,42 @@ class DivisionScene(Scene):
                 d3_frac_line = Line(LEFT, RIGHT, color=C_FORMULA).set_width(max(d3_numerator.get_width(), d3_denominator.get_width()) + 0.2)
                 d3_frac = VGroup(d3_numerator, d3_frac_line, d3_denominator).arrange(DOWN, buff=0.1)
 
-                eq = VGroup(
-                    Tex(r"\hat{q}").set_color(C_GRID_Q),
-                    Tex(r"=").set_color(C_FORMULA),
-                    Tex(r"\lfloor\ ").set_color(C_FORMULA),
-                    d3_frac,
-                    Tex(r"\ \rfloor").set_color(C_FORMULA),
-                    Tex(r"=").set_color(C_FORMULA),
-                    Tex(digit_to_symbol(step["q_hat"])).set_color(C_GRID_Q),
-                ).arrange(RIGHT, buff=0.15).scale(0.85)
+                raw_q_hat_val = step.get("raw_q_hat", step["q_hat"])
+                
+                if raw_q_hat_val != step["q_hat"]:
+                    # Show that it was initially calculated as raw_q_hat then adjusted
+                    eq = VGroup(
+                        Tex(r"\hat{q}").set_color(C_GRID_Q),
+                        Tex(r"=").set_color(C_FORMULA),
+                        Tex(r"\lfloor\ ").set_color(C_FORMULA),
+                        d3_frac,
+                        Tex(r"\ \rfloor").set_color(C_FORMULA),
+                        Tex(r"=").set_color(C_FORMULA),
+                        Tex(digit_to_symbol(raw_q_hat_val)).set_color(C_HIGHLIGHT_R),
+                        Tex(r"\rightarrow").set_color(C_FORMULA),
+                        Tex(digit_to_symbol(step["q_hat"])).set_color(C_GRID_Q)
+                    ).arrange(RIGHT, buff=0.15).scale(0.85)
+
+                    # Strike through the raw value
+                    strike = Line(
+                        eq[6].get_corner(UL),
+                        eq[6].get_corner(DR),
+                        color=C_HIGHLIGHT_R,
+                        stroke_width=3
+                    )
+                    eq.add(strike)
+                    eq_result_idx = 8
+                else:
+                    eq = VGroup(
+                        Tex(r"\hat{q}").set_color(C_GRID_Q),
+                        Tex(r"=").set_color(C_FORMULA),
+                        Tex(r"\lfloor\ ").set_color(C_FORMULA),
+                        d3_frac,
+                        Tex(r"\ \rfloor").set_color(C_FORMULA),
+                        Tex(r"=").set_color(C_FORMULA),
+                        Tex(digit_to_symbol(step["q_hat"])).set_color(C_GRID_Q),
+                    ).arrange(RIGHT, buff=0.15).scale(0.85)
+                    eq_result_idx = 6
                 eq.next_to(window_display, DOWN, buff=0.3)
                 eq.set_x(self.step_badge.get_x())
 
@@ -644,20 +674,22 @@ class DivisionScene(Scene):
                     )
                     new_u_window.set_fill(C_WINDOW_U, opacity=0.12)
                     if u_window_mobj is not None:
-                        gen_anims.append(FadeOut(u_window_mobj))
+                        gen_anims.append(ReplacementTransform(u_window_mobj, new_u_window))
 
                 # Highlight exactly 2 cells for D3.
                 d3_highlights = [safe_highlight(cell, color=C_HIGHLIGHT_Y) for cell in d3_cells]
 
                 anim_u_num = TransformFromCopy(VGroup(u_cells[u_vis_1][-1], u_cells[u_vis_2][-1]), d3_numerator)
                 anim_v_den = TransformFromCopy(v_cells[v_vis][-1], d3_denominator)
-                rest_eq = VGroup(eq[0], eq[1], eq[2], d3_frac_line, eq[4], eq[5], eq[6])
+                
+                rest_elements = [eq[0], eq[1], eq[2], d3_frac_line, eq[4], eq[5], eq[6]]
+                rest_eq = VGroup(*rest_elements)
 
                 self.play(
                     *gen_anims,
                     FadeIn(window_display, shift=UP * 0.2),
                     FadeIn(d3_eq_tag, shift=UP * 0.1),
-                    *([FadeIn(new_u_window)] if new_u_window is not None else []),
+                    *([FadeIn(new_u_window)] if new_u_window is not None and u_window_mobj is None else []),
                     run_time=0.7,
                 )
                 # Show the U window first, then 0.5s later show the yellow D3 highlights.
@@ -668,14 +700,45 @@ class DivisionScene(Scene):
                     FadeIn(rest_eq, shift=UP * 0.2),
                     run_time=0.9,
                 )
+                
+                d3_result_mobj = VGroup(window_display, eq, d3_eq_tag)
+
+                if raw_q_hat_val != step["q_hat"]:
+                    self.wait(1.0 * WAIT_SCALE_D)
+                    u_window_num = digits_be_to_int(step["window_digits"], base_val)
+                    v_norm_num = digits_le_to_int(step["v_norm"], base_val)
+                    test_product = raw_q_hat_val * v_norm_num
+                    
+                    expl_txt = Tex(
+                        rf"\text{{Test: }}\hat{{q}} \times V = {raw_q_hat_val} \times {v_norm_num} = {test_product}",
+                        color=C_DIM
+                    ).scale(0.65)
+                    compare_txt = Tex(
+                        rf"{test_product} > U_w \text{{ (}}{u_window_num}\text{{)}} \Rightarrow \text{{Too big!}}",
+                        color=C_HIGHLIGHT_R
+                    ).scale(0.65)
+                    expl_group = VGroup(expl_txt, compare_txt).arrange(DOWN, buff=0.1, aligned_edge=RIGHT)
+                    expl_group.next_to(d3_result_mobj, RIGHT, buff=1.0)
+                    
+                    self.play(FadeIn(expl_group, shift=LEFT * 0.1), run_time=0.6)
+                    self.wait(1.5 * WAIT_SCALE_D)
+                    
+                    self.play(
+                        ShowCreation(eq[9]), # strike
+                        FadeIn(eq[7], shift=RIGHT * 0.1), # arrow
+                        FadeIn(eq[8], shift=RIGHT * 0.1), # new q_hat
+                        run_time=0.6
+                    )
+                    d3_result_mobj.add(expl_group)
+                    
                 d3_frac.add(d3_numerator, d3_denominator) # Ensure they are formally part of frac 
                 eq.add(d3_frac) # Ensure frac is fully attached to eq
                 gen_formula_mobj = new_gen
-                d3_result_mobj = VGroup(window_display, eq, d3_eq_tag)
+                
                 if new_u_window is not None:
                     u_window_mobj = new_u_window
 
-                self.wait(1.2 * WAIT_SCALE_D)
+                self.wait(1.5 * WAIT_SCALE_D)
 
             # ═══════════════════  INTERACTION HIGHLIGHT  ══════════════════
             elif step["type"] == "interaction_highlight":
@@ -958,8 +1021,15 @@ class DivisionScene(Scene):
                 q_hat_source = None
                 if d4_work_mobj is not None and len(d4_work_mobj) > 1 and len(d4_work_mobj[1]) > 4:
                     q_hat_source = d4_work_mobj[1][4]
-                elif d3_result_mobj is not None and len(d3_result_mobj) > 1 and len(d3_result_mobj[1]) >= 7:
-                    q_hat_source = d3_result_mobj[1][6] # Note: eq has 7 elements now: q_hat, =, \lfloor, frac, \rfloor, =, result
+                elif d3_result_mobj is not None and len(d3_result_mobj) > 1:
+                    # In D3 eq, depending on whether it was adjusted, q_hat result might be at index 6 or 8.
+                    # We injected `eq_result_idx` into the object via a dynamic attribute or we can just access the last element safely before the strike if it existed.
+                    # The easiest robust way is just the last actual Tex object representing q_hat
+                    d3_eq = d3_result_mobj[1]
+                    if len(d3_eq) >= 10: # has strikethrough (10 elements total)
+                        q_hat_source = d3_eq[8]
+                    elif len(d3_eq) >= 7: # regular (7 elements total)
+                        q_hat_source = d3_eq[6]
                 if q_hat_source is not None:
                     q_hat_fly_token = q_hat_source.copy()
                     self.add(q_hat_fly_token)
@@ -968,9 +1038,7 @@ class DivisionScene(Scene):
                 if d4_work_mobj is not None:
                     fade_temp.append(FadeOut(d4_work_mobj))
                     d4_work_mobj = None
-                if u_window_mobj is not None:
-                    fade_temp.append(FadeOut(u_window_mobj))
-                    u_window_mobj = None
+                # u_window_mobj is intentionally kept visible for sliding effect
                 if gen_formula_mobj is not None:
                     fade_temp.append(FadeOut(gen_formula_mobj))
                     gen_formula_mobj = None
@@ -985,16 +1053,16 @@ class DivisionScene(Scene):
                 if step["type"] == "add_back":
                     prev_q_hat = q_hat + 1
                     add_back_title = Text(
-                        "q_hat overestimated -> add back V",
+                        "Subtraction result < 0 ✗ (Overestimated q̂)",
                         font_size=18,
                         color=C_HIGHLIGHT_R,
                     )
-                    qhat_prefix = Tex(r"\hat{q}:", color=C_GRID_Q).scale(0.62)
+                    qhat_prefix = Tex(r"\text{Decrease }\hat{q}:", color=C_GRID_Q).scale(0.62)
                     old_q_tex = Tex(digit_to_symbol(prev_q_hat), color=C_GRID_Q).scale(0.68)
-                    eq_tex = Tex("=", color=C_FORMULA).scale(0.62)
+                    arrow_tex = Tex(r"\rightarrow", color=C_FORMULA).scale(0.62)
                     new_q_tex = Tex(digit_to_symbol(q_hat), color=C_GRID_Q).scale(0.68)
-                    add_back_q_row = VGroup(qhat_prefix, old_q_tex, eq_tex, new_q_tex).arrange(
-                        RIGHT, buff=0.12, aligned_edge=DOWN
+                    add_back_q_row = VGroup(qhat_prefix, old_q_tex, arrow_tex, new_q_tex).arrange(
+                        RIGHT, buff=0.15, aligned_edge=DOWN
                     )
                     old_q_strike = Line(
                         old_q_tex.get_corner(UL),
@@ -1005,12 +1073,12 @@ class DivisionScene(Scene):
                     add_back_q = VGroup(add_back_q_row, old_q_strike)
                     v_norm_value_str = int_to_base_str(v_norm_value_num, base_val)
                     add_back_u = Tex(
-                        rf"U_w \leftarrow U_w + V\;(= +{v_norm_value_str})",
+                        rf"\text{{Add back }} V \text{{ to }} U_w: U_w \leftarrow U_w + {v_norm_value_str}",
                         color=C_FORMULA,
                         tex_to_color_map={
                             r"U_w": C_GRID_U,
                             r"V": C_GRID_V,
-                            r"\hat{q}": C_GRID_Q,
+                            str(v_norm_value_str): C_HIGHLIGHT_Y,
                         }
                     ).scale(0.58)
                     add_back_info = VGroup(add_back_title, add_back_q, add_back_u).arrange(
@@ -1176,6 +1244,9 @@ class DivisionScene(Scene):
                 if d3_result_mobj is not None:
                     pre_d7_fade.append(FadeOut(d3_result_mobj))
                     d3_result_mobj = None
+                if u_window_mobj is not None:
+                    pre_d7_fade.append(FadeOut(u_window_mobj))
+                    u_window_mobj = None
                 if pre_d7_fade:
                     self.play(*pre_d7_fade, run_time=0.3)
 
