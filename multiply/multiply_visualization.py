@@ -8,23 +8,32 @@ U_VALUE = "12345678"
 V_VALUE = "87654321"
 BASE = 10
 
-STEP_RUN_TIME = 0.55
-STEP_HOLD_TIME = 0.22
-TRANSITION_SHIFT = 0.18
+# Timing
+INTRO_WAIT = 0.6
+STEP_IN_TIME = 0.45
+STEP_OUT_TIME = 0.3
+STEP_HOLD = 0.4
+INTERNAL_TIME = 0.55
+FINAL_WAIT = 2.2
 
-BG_COLOR = "#0f1117"
-PANEL_BG = "#141926"
-PANEL_ALT = "#1b2233"
+# Palette
+BG_COLOR = "#0b1020"
+SURFACE = "#10182b"
+SURFACE_2 = "#15203a"
+SURFACE_3 = "#0f1729"
+LINE_SOFT = "#73809d"
 TEXT_MAIN = WHITE
-TEXT_DIM = GREY_A
-ACCENT_CALL = "#7dd3fc"
-ACCENT_SPLIT = "#a78bfa"
-ACCENT_SUM = "#f59e0b"
-ACCENT_BASE = "#34d399"
-ACCENT_COMBINE = "#f472b6"
-ACCENT_RETURN = "#f87171"
-ACCENT_RESULT = "#facc15"
-LINE_SOFT = GREY_B
+TEXT_DIM = GREY_B
+TEXT_FAINT = GREY_C
+ACCENT_A = "#64d2ff"
+ACCENT_B = "#6ef3a5"
+ACCENT_SPLIT = "#b388ff"
+ACCENT_SUM = "#ffb84d"
+ACCENT_BASE = "#40e0a8"
+ACCENT_COMBINE = "#ff7ac6"
+ACCENT_RETURN = "#ff8a80"
+ACCENT_RESULT = "#ffd54f"
+ACCENT_INFO = "#8ec5ff"
 
 
 # ============================================================
@@ -37,20 +46,23 @@ def trim_leading_zeros(arr):
     return arr
 
 
+
 def string_to_little_endian(num_str):
     num_str = num_str.strip()
     if not num_str:
         raise ValueError("Input string must not be empty")
     if not num_str.isdigit():
-        raise ValueError(f"Input must contain only digits, got {num_str!r}")
+        raise ValueError(f"Input must contain only decimal digits, got {num_str!r}")
     if num_str == "0":
         return [0]
     return [int(ch) for ch in reversed(num_str)]
 
 
+
 def little_endian_to_string(arr):
     arr = trim_leading_zeros(arr)
     return "".join(str(d) for d in reversed(arr))
+
 
 
 def add_le(a, b, base=10):
@@ -68,6 +80,7 @@ def add_le(a, b, base=10):
     return trim_leading_zeros(result)
 
 
+
 def compare_le(a, b):
     a = trim_leading_zeros(a)
     b = trim_leading_zeros(b)
@@ -81,6 +94,7 @@ def compare_le(a, b):
         if a[i] > b[i]:
             return 1
     return 0
+
 
 
 def sub_le(a, b, base=10):
@@ -101,10 +115,12 @@ def sub_le(a, b, base=10):
     return trim_leading_zeros(result)
 
 
+
 def shift_left_le(a, k):
     if a == [0]:
         return [0]
     return [0] * k + a
+
 
 
 def schoolbook_mul_le(a, b, base=10):
@@ -248,263 +264,411 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
 
 
 # ============================================================
-# Formatting helpers
+# Layout helpers
 # ============================================================
-def short_label(label, keep=18):
-    if len(label) <= keep:
-        return label
-    return "..." + label[-keep:]
-
-
 def fit_width(mobj, width):
     if mobj.get_width() > width:
         mobj.set_width(width)
     return mobj
 
 
-def build_digit_row(value, color, title, box_width=4.0):
-    frame = RoundedRectangle(
-        corner_radius=0.16,
-        width=box_width,
-        height=1.2,
-        stroke_color=color,
-        stroke_width=2,
-        fill_color=PANEL_ALT,
-        fill_opacity=1,
-    )
-    label = Text(title, font_size=22, color=TEXT_DIM)
-    digits = Text(str(value), font_size=34, color=color)
-    fit_width(digits, box_width - 0.5)
-    group = VGroup(label, digits).arrange(DOWN, buff=0.14)
-    group.move_to(frame.get_center())
-    return VGroup(frame, group)
+
+def short_label(label, keep=20):
+    if len(label) <= keep:
+        return label
+    return "..." + label[-keep:]
 
 
-class MultiplicationScene(Scene):
-    def make_chip(self, text, color, font_size=20, h_buff=0.22, v_buff=0.12):
+
+def accent_for_step(step_type):
+    return {
+        "call": ACCENT_INFO,
+        "split": ACCENT_SPLIT,
+        "sum_parts": ACCENT_SUM,
+        "base_case": ACCENT_BASE,
+        "combine_parts": ACCENT_COMBINE,
+        "return": ACCENT_RETURN,
+    }[step_type]
+
+
+class KaratsubaUltraBeautifulScene(Scene):
+    def make_pill(self, text, color, font_size=18, fill=SURFACE_2):
         label = Text(text, font_size=font_size, color=color)
-        box = RoundedRectangle(
+        frame = RoundedRectangle(
             corner_radius=0.14,
-            width=label.get_width() + h_buff * 2,
-            height=label.get_height() + v_buff * 2,
+            width=label.get_width() + 0.36,
+            height=label.get_height() + 0.24,
             stroke_color=color,
             stroke_width=1.6,
-            fill_color=PANEL_ALT,
+            fill_color=fill,
             fill_opacity=1,
         )
-        label.move_to(box.get_center())
-        return VGroup(box, label)
+        label.move_to(frame.get_center())
+        return VGroup(frame, label)
 
-    def make_header(self, u_str, v_str):
-        title = Text("Karatsuba Multiplication", font_size=34, color=TEXT_MAIN)
-        subtitle = Text("single-focus step-by-step animation", font_size=18, color=TEXT_DIM)
-        title_block = VGroup(title, subtitle).arrange(DOWN, buff=0.08, aligned_edge=LEFT)
+    def make_value_box(self, title, value, color, width=2.7, height=1.28, value_font_size=30):
+        frame = RoundedRectangle(
+            corner_radius=0.16,
+            width=width,
+            height=height,
+            stroke_color=color,
+            stroke_width=2,
+            fill_color=SURFACE_2,
+            fill_opacity=1,
+        )
+        title_m = Text(title, font_size=18, color=TEXT_DIM)
+        value_m = Text(str(value), font_size=value_font_size, color=color)
+        fit_width(value_m, width - 0.4)
+        group = VGroup(title_m, value_m).arrange(DOWN, buff=0.12)
+        group.move_to(frame.get_center())
+        return VGroup(frame, group)
 
-        left_box = build_digit_row(u_str, ACCENT_CALL, "multiplicand A", box_width=3.9)
-        right_box = build_digit_row(v_str, ACCENT_BASE, "multiplier B", box_width=3.9)
-        op = Text("×", font_size=36, color=LINE_SOFT)
-        problem_row = VGroup(left_box, op, right_box).arrange(RIGHT, buff=0.28, aligned_edge=DOWN)
-
-        whole = VGroup(title_block, problem_row).arrange(DOWN, buff=0.32)
-        whole.to_edge(UP, buff=0.4)
-        return whole
-
-    def empty_stage_panel(self):
-        panel = RoundedRectangle(
-            corner_radius=0.18,
-            width=11.8,
-            height=4.7,
+    def make_stage(self):
+        outer = RoundedRectangle(
+            corner_radius=0.22,
+            width=11.9,
+            height=5.15,
             stroke_color=LINE_SOFT,
             stroke_width=1.8,
-            fill_color=PANEL_BG,
+            fill_color=SURFACE,
+            fill_opacity=1,
+        )
+        outer.move_to([0, -0.55, 0])
+        return outer
+
+    def make_header(self, a_str, b_str):
+        title = Text("Karatsuba Multiplication", font_size=34, color=TEXT_MAIN)
+        subtitle = Text("cinematic recursive walkthrough", font_size=18, color=TEXT_DIM)
+        title_block = VGroup(title, subtitle).arrange(DOWN, buff=0.08, aligned_edge=LEFT)
+
+        a_box = self.make_value_box("multiplicand A", a_str, ACCENT_A, width=3.35, value_font_size=32)
+        b_box = self.make_value_box("multiplier B", b_str, ACCENT_B, width=3.35, value_font_size=32)
+        times = Text("×", font_size=34, color=LINE_SOFT)
+        row = VGroup(a_box, times, b_box).arrange(RIGHT, buff=0.28, aligned_edge=DOWN)
+
+        header = VGroup(title_block, row).arrange(DOWN, buff=0.28)
+        header.to_edge(UP, buff=0.38)
+        return header
+
+    def make_meta_row(self, step, index, total, color):
+        kind = self.make_pill(step["type"].replace("_", " ").upper(), color, font_size=18)
+        depth = self.make_pill(f"depth {step['depth']}", TEXT_DIM, font_size=17)
+        idx = self.make_pill(f"{index}/{total}", LINE_SOFT, font_size=17)
+        label = self.make_pill(short_label(step["label"]), TEXT_FAINT, font_size=16, fill=SURFACE_3)
+        row = VGroup(kind, depth, label, idx).arrange(RIGHT, buff=0.16, aligned_edge=DOWN)
+        fit_width(row, 10.8)
+        return row
+
+    def make_formula_line(self, latex, color_map=None, scale_value=0.72):
+        tex = Tex(latex, color=TEXT_MAIN, tex_to_color_map=color_map or {})
+        tex.scale(scale_value)
+        return tex
+
+    def swap_stage(self, old_group, new_group):
+        if old_group is None:
+            self.play(FadeIn(new_group, shift=DOWN * 0.14), run_time=STEP_IN_TIME)
+            return new_group
+        self.play(
+            FadeOut(old_group, shift=UP * 0.14),
+            FadeIn(new_group, shift=DOWN * 0.14),
+            run_time=STEP_IN_TIME,
+        )
+        return new_group
+
+    def build_generic_shell(self, step, index, total, title_text, color):
+        panel = self.make_stage()
+        meta = self.make_meta_row(step, index, total, color)
+        meta.move_to(panel.get_top() + DOWN * 0.38)
+        title = Text(title_text, font_size=31, color=TEXT_MAIN)
+        fit_width(title, 10.2)
+        title.move_to(panel.get_center() + UP * 1.45)
+        divider = Line(
+            panel.get_left() + RIGHT * 0.45 + UP * 0.95,
+            panel.get_right() + LEFT * 0.45 + UP * 0.95,
+            color=SURFACE_2,
+            stroke_width=2,
+        )
+        shell = VGroup(panel, meta, title, divider)
+        return shell, panel, title
+
+    def play_call_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Enter recursive call", color)
+
+        expr = Text(f"{step['a']} × {step['b']}", font_size=52, color=color)
+        fit_width(expr, 8.8)
+        expr.move_to(panel.get_center() + UP * 0.15)
+
+        hint = Text("Decide whether to split or use the base case.", font_size=21, color=TEXT_DIM)
+        fit_width(hint, 9.5)
+        hint.move_to(panel.get_center() + DOWN * 1.25)
+
+        view = VGroup(shell, expr, hint)
+        current = self.swap_stage(current, view)
+        self.wait(STEP_HOLD)
+        return current
+
+    def play_base_case_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Base case: multiply directly", color)
+
+        left = self.make_value_box("left", step["a"], ACCENT_A, width=2.2, value_font_size=28)
+        right = self.make_value_box("right", step["b"], ACCENT_B, width=2.2, value_font_size=28)
+        product = self.make_value_box("product", step["result"], color, width=2.9, value_font_size=30)
+        times = Text("×", font_size=30, color=LINE_SOFT)
+        equals = Text("=", font_size=30, color=LINE_SOFT)
+        row = VGroup(left, times, right, equals, product).arrange(RIGHT, buff=0.24, aligned_edge=DOWN)
+        fit_width(row, 9.8)
+        row.move_to(panel.get_center() + UP * 0.15)
+
+        note = Text("Numbers are small enough, so schoolbook multiplication finishes this branch.", font_size=20, color=TEXT_DIM)
+        fit_width(note, 9.8)
+        note.move_to(panel.get_center() + DOWN * 1.3)
+
+        view = VGroup(shell, row, note)
+        current = self.swap_stage(current, view)
+        self.wait(STEP_HOLD + 0.1)
+        return current
+
+    def play_return_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Return to parent call", color)
+
+        bubble = RoundedRectangle(
+            corner_radius=0.18,
+            width=6.0,
+            height=1.5,
+            stroke_color=color,
+            stroke_width=2,
+            fill_color=SURFACE_2,
+            fill_opacity=1,
+        )
+        bubble.move_to(panel.get_center() + UP * 0.2)
+        label = Text(short_label(step["label"], keep=26), font_size=22, color=TEXT_DIM)
+        value = Text(step["result"], font_size=36, color=color)
+        fit_width(value, 4.8)
+        content = VGroup(label, value).arrange(DOWN, buff=0.08).move_to(bubble.get_center())
+        arrow = Arrow(
+            bubble.get_top() + UP * 0.05,
+            bubble.get_top() + UP * 0.8,
+            buff=0.05,
+            color=color,
+            stroke_width=4,
+        )
+        note = Text("Computed value bubbles upward and becomes available to the previous frame.", font_size=20, color=TEXT_DIM)
+        fit_width(note, 9.8)
+        note.move_to(panel.get_center() + DOWN * 1.35)
+
+        view = VGroup(shell, bubble, content, arrow, note)
+        current = self.swap_stage(current, view)
+        self.play(GrowArrow(arrow), run_time=INTERNAL_TIME * 0.75)
+        self.wait(STEP_HOLD)
+        return current
+
+    def play_sum_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Build the middle product", color)
+
+        left_eq = self.make_formula_line(
+            rf"a_0 + a_1 = {step['a0']} + {step['a1']} = {step['sum_a']}",
+            {step['sum_a']: ACCENT_A},
+            0.88,
+        )
+        right_eq = self.make_formula_line(
+            rf"b_0 + b_1 = {step['b0']} + {step['b1']} = {step['sum_b']}",
+            {step['sum_b']: ACCENT_B},
+            0.88,
+        )
+        target = self.make_value_box("recursive target", f"{step['sum_a']} × {step['sum_b']}", color, width=5.4, value_font_size=28)
+
+        left_eq.move_to(panel.get_center() + UP * 0.55)
+        right_eq.move_to(panel.get_center() + DOWN * 0.05)
+        target.move_to(panel.get_center() + DOWN * 1.25)
+
+        view = VGroup(shell, left_eq, right_eq, target)
+        current = self.swap_stage(current, view)
+        self.play(FadeIn(left_eq, shift=RIGHT * 0.08), run_time=INTERNAL_TIME * 0.8)
+        self.play(FadeIn(right_eq, shift=RIGHT * 0.08), run_time=INTERNAL_TIME * 0.8)
+        self.play(FadeIn(target, shift=UP * 0.08), run_time=INTERNAL_TIME)
+        self.wait(STEP_HOLD)
+        return current
+
+    def play_split_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Split into high and low halves", color)
+
+        a_full = self.make_value_box("A", step["a"], ACCENT_A, width=3.25, value_font_size=32)
+        b_full = self.make_value_box("B", step["b"], ACCENT_B, width=3.25, value_font_size=32)
+        row = VGroup(a_full, b_full).arrange(RIGHT, buff=0.8)
+        row.move_to(panel.get_center() + UP * 0.55)
+
+        a_hi = self.make_value_box("A high", step["a1"], ACCENT_A, width=2.1, value_font_size=26)
+        a_lo = self.make_value_box("A low", step["a0"], ACCENT_A, width=2.1, value_font_size=26)
+        b_hi = self.make_value_box("B high", step["b1"], ACCENT_B, width=2.1, value_font_size=26)
+        b_lo = self.make_value_box("B low", step["b0"], ACCENT_B, width=2.1, value_font_size=26)
+
+        a_parts = VGroup(a_hi, a_lo).arrange(RIGHT, buff=0.18)
+        b_parts = VGroup(b_hi, b_lo).arrange(RIGHT, buff=0.18)
+        a_parts.move_to(panel.get_center() + LEFT * 2.7 + DOWN * 1.0)
+        b_parts.move_to(panel.get_center() + RIGHT * 2.7 + DOWN * 1.0)
+
+        a_arrow = Arrow(a_full.get_bottom(), a_parts.get_top() + UP * 0.12, buff=0.08, color=ACCENT_A, stroke_width=4)
+        b_arrow = Arrow(b_full.get_bottom(), b_parts.get_top() + UP * 0.12, buff=0.08, color=ACCENT_B, stroke_width=4)
+
+        split_note = Text(f"m = {step['m']}", font_size=22, color=color)
+        split_note.move_to(panel.get_center() + DOWN * 0.25)
+
+        formula_a = self.make_formula_line(
+            rf"A = A_1 \cdot 10^{{{step['m']}}} + A_0",
+            {"A_1": ACCENT_A, "A_0": ACCENT_A},
+            0.84,
+        )
+        formula_b = self.make_formula_line(
+            rf"B = B_1 \cdot 10^{{{step['m']}}} + B_0",
+            {"B_1": ACCENT_B, "B_0": ACCENT_B},
+            0.84,
+        )
+        formulas = VGroup(formula_a, formula_b).arrange(DOWN, buff=0.18, aligned_edge=LEFT)
+        formulas.move_to(panel.get_center() + DOWN * 1.95)
+
+        static_view = VGroup(shell, row, split_note)
+        current = self.swap_stage(current, static_view)
+        self.play(
+            GrowArrow(a_arrow),
+            GrowArrow(b_arrow),
+            TransformFromCopy(a_full, a_parts),
+            TransformFromCopy(b_full, b_parts),
+            run_time=INTERNAL_TIME,
+        )
+        self.play(FadeIn(formulas, shift=UP * 0.08), run_time=INTERNAL_TIME * 0.9)
+        current = VGroup(shell, row, split_note, a_arrow, b_arrow, a_parts, b_parts, formulas)
+        self.wait(STEP_HOLD)
+        return current
+
+    def play_combine_step(self, current, step, index, total):
+        color = accent_for_step(step["type"])
+        shell, panel, _ = self.build_generic_shell(step, index, total, "Merge the three recursive products", color)
+
+        z2_box = self.make_value_box("z2 = high×high", step["z2"], ACCENT_A, width=2.9, value_font_size=27)
+        z1raw_box = self.make_value_box("z1raw", step["z1_raw"], ACCENT_SUM, width=2.4, value_font_size=27)
+        z0_box = self.make_value_box("z0 = low×low", step["z0"], ACCENT_B, width=2.9, value_font_size=27)
+        top_row = VGroup(z2_box, z1raw_box, z0_box).arrange(RIGHT, buff=0.18, aligned_edge=DOWN)
+        fit_width(top_row, 10.4)
+        top_row.move_to(panel.get_center() + UP * 0.6)
+
+        middle_fix = self.make_formula_line(
+            rf"z_1 = z_{{1raw}} - z_2 - z_0 = {step['z1']}",
+            {r"z_1": color, r"z_{1raw}": ACCENT_SUM, r"z_2": ACCENT_A, r"z_0": ACCENT_B, step['z1']: color},
+            0.9,
+        )
+        middle_fix.move_to(panel.get_center() + DOWN * 0.35)
+
+        final_formula = self.make_formula_line(
+            rf"result = z_2\cdot 10^{{{2 * step['m']}}} + z_1\cdot 10^{{{step['m']}}} + z_0",
+            {r"z_2": ACCENT_A, r"z_1": color, r"z_0": ACCENT_B},
+            0.84,
+        )
+        final_formula.move_to(panel.get_center() + DOWN * 1.65)
+
+        base_view = VGroup(shell, top_row)
+        current = self.swap_stage(current, base_view)
+        self.play(FadeIn(top_row, shift=UP * 0.08), run_time=INTERNAL_TIME * 0.9)
+        self.play(TransformFromCopy(z1raw_box, middle_fix), run_time=INTERNAL_TIME)
+        self.play(FadeIn(final_formula, shift=UP * 0.08), run_time=INTERNAL_TIME * 0.9)
+        current = VGroup(shell, top_row, middle_fix, final_formula)
+        self.wait(STEP_HOLD + 0.05)
+        return current
+
+    def make_final_view(self, a_str, b_str, result_str):
+        panel = RoundedRectangle(
+            corner_radius=0.24,
+            width=11.8,
+            height=5.2,
+            stroke_color=ACCENT_RESULT,
+            stroke_width=2.2,
+            fill_color=SURFACE,
             fill_opacity=1,
         )
         panel.move_to([0, -0.55, 0])
-        return panel
-
-    def build_step_view(self, step, index, total):
-        step_type = step["type"]
-        color = {
-            "call": ACCENT_CALL,
-            "split": ACCENT_SPLIT,
-            "sum_parts": ACCENT_SUM,
-            "base_case": ACCENT_BASE,
-            "combine_parts": ACCENT_COMBINE,
-            "return": ACCENT_RETURN,
-        }[step_type]
-
-        panel = self.empty_stage_panel()
-        top_left = panel.get_corner(UL) + RIGHT * 0.4 + DOWN * 0.34
-        top_right = panel.get_corner(UR) + LEFT * 0.4 + DOWN * 0.34
-
-        kind = self.make_chip(step_type.replace("_", " ").upper(), color, font_size=18)
-        prog = self.make_chip(f"step {index}/{total}", LINE_SOFT, font_size=18)
-        depth_chip = self.make_chip(f"depth {step['depth']}", TEXT_DIM, font_size=17)
-        label_chip = self.make_chip(short_label(step["label"]), TEXT_DIM, font_size=17)
-
-        kind.move_to(top_left + RIGHT * (kind.get_width() / 2))
-        prog.move_to(top_right - RIGHT * (prog.get_width() / 2))
-        depth_chip.next_to(kind, DOWN, buff=0.14, aligned_edge=LEFT)
-        label_chip.next_to(prog, DOWN, buff=0.14, aligned_edge=RIGHT)
-
-        title = Text("", font_size=34, color=TEXT_MAIN)
-        title.move_to(panel.get_center() + UP * 0.9)
-
-        lines = []
-        extras = VGroup()
-
-        if step_type == "call":
-            title = Text("Enter recursion", font_size=32, color=TEXT_MAIN)
-            expr = Text(f"{step['a']} × {step['b']}", font_size=52, color=color)
-            hint = Text("check size and recurse if needed", font_size=20, color=TEXT_DIM)
-            lines = [expr, hint]
-
-        elif step_type == "split":
-            title = Text("Split into high and low parts", font_size=32, color=TEXT_MAIN)
-            line1 = Text(f"A = {step['a1']}·10^{step['m']} + {step['a0']}", font_size=28, color=ACCENT_CALL)
-            line2 = Text(f"B = {step['b1']}·10^{step['m']} + {step['b0']}", font_size=28, color=ACCENT_BASE)
-            line3 = Text(f"m = {step['m']}", font_size=24, color=TEXT_DIM)
-            left_half = build_digit_row(step['a1'], ACCENT_CALL, "A high", box_width=2.3)
-            right_half = build_digit_row(step['a0'], ACCENT_CALL, "A low", box_width=2.3)
-            top_halves = VGroup(left_half, right_half).arrange(RIGHT, buff=0.2)
-            left_half_b = build_digit_row(step['b1'], ACCENT_BASE, "B high", box_width=2.3)
-            right_half_b = build_digit_row(step['b0'], ACCENT_BASE, "B low", box_width=2.3)
-            bottom_halves = VGroup(left_half_b, right_half_b).arrange(RIGHT, buff=0.2)
-            halves = VGroup(top_halves, bottom_halves).arrange(DOWN, buff=0.2)
-            fit_width(halves, 7.8)
-            extras = halves
-            lines = [line1, line2, line3]
-
-        elif step_type == "sum_parts":
-            title = Text("Prepare the middle product", font_size=32, color=TEXT_MAIN)
-            line1 = Text(f"a0 + a1 = {step['a0']} + {step['a1']} = {step['sum_a']}", font_size=27, color=ACCENT_CALL)
-            line2 = Text(f"b0 + b1 = {step['b0']} + {step['b1']} = {step['sum_b']}", font_size=27, color=ACCENT_BASE)
-            line3 = Text(f"Need z1raw = {step['sum_a']} × {step['sum_b']}", font_size=24, color=color)
-            lines = [line1, line2, line3]
-
-        elif step_type == "base_case":
-            title = Text("Base case", font_size=32, color=TEXT_MAIN)
-            expr = Text(f"{step['a']} × {step['b']} = {step['result']}", font_size=42, color=color)
-            hint = Text("small enough → use schoolbook multiplication", font_size=20, color=TEXT_DIM)
-            lines = [expr, hint]
-
-        elif step_type == "combine_parts":
-            title = Text("Combine z0, z1, z2", font_size=32, color=TEXT_MAIN)
-            line1 = Text(f"z0 = {step['z0']}    z2 = {step['z2']}", font_size=28, color=ACCENT_CALL)
-            line2 = Text(f"z1raw = {step['z1_raw']}  →  z1 = {step['z1']}", font_size=28, color=ACCENT_SUM)
-            line3 = Text(f"result = z2·10^{2 * step['m']} + z1·10^{step['m']} + z0", font_size=24, color=color)
-            lines = [line1, line2, line3]
-
-        elif step_type == "return":
-            title = Text("Return result", font_size=32, color=TEXT_MAIN)
-            expr = Text(f"{short_label(step['label'], keep=24)}  →  {step['result']}", font_size=40, color=color)
-            hint = Text("bubble result back to parent call", font_size=20, color=TEXT_DIM)
-            lines = [expr, hint]
-
-        title.move_to(panel.get_center() + UP * 0.95)
-        fit_width(title, 9.5)
-
-        text_objs = VGroup(*lines)
-        text_objs.arrange(DOWN, buff=0.24)
-        fit_width(text_objs, 9.6)
-        text_objs.move_to(panel.get_center() + UP * 0.05)
-
-        if len(extras) > 0:
-            fit_width(extras, 8.2)
-            extras.next_to(text_objs, DOWN, buff=0.35)
-
-        return VGroup(panel, kind, prog, depth_chip, label_chip, title, text_objs, extras)
-
-    def transition_to(self, current_group, next_group):
-        if current_group is None:
-            self.play(FadeIn(next_group, shift=DOWN * TRANSITION_SHIFT), run_time=STEP_RUN_TIME)
-            return next_group
-
-        self.play(
-            FadeOut(current_group, shift=UP * TRANSITION_SHIFT),
-            FadeIn(next_group, shift=DOWN * TRANSITION_SHIFT),
-            run_time=STEP_RUN_TIME,
-        )
-        return next_group
-
-    def make_final_view(self, u_str, v_str, result_str):
-        panel = RoundedRectangle(
-            corner_radius=0.22,
-            width=11.4,
-            height=4.9,
-            stroke_color=ACCENT_RESULT,
-            stroke_width=2.2,
-            fill_color=PANEL_BG,
-            fill_opacity=1,
-        )
-        panel.move_to([0, -0.5, 0])
 
         title = Text("Final result", font_size=36, color=TEXT_MAIN)
-        title.move_to(panel.get_center() + UP * 1.45)
+        title.move_to(panel.get_center() + UP * 1.65)
 
-        a_box = build_digit_row(u_str, ACCENT_CALL, "multiplicand A", box_width=3.15)
-        b_box = build_digit_row(v_str, ACCENT_BASE, "multiplier B", box_width=3.15)
-        r_box = build_digit_row(result_str, ACCENT_RESULT, "result", box_width=4.2)
-
+        a_box = self.make_value_box("A", a_str, ACCENT_A, width=3.0, value_font_size=30)
+        b_box = self.make_value_box("B", b_str, ACCENT_B, width=3.0, value_font_size=30)
+        result_box = self.make_value_box("A × B", result_str, ACCENT_RESULT, width=4.1, value_font_size=32)
         times = Text("×", font_size=32, color=LINE_SOFT)
         equals = Text("=", font_size=32, color=LINE_SOFT)
-        row = VGroup(a_box, times, b_box, equals, r_box).arrange(RIGHT, buff=0.22, aligned_edge=DOWN)
-        fit_width(row, 10.2)
-        row.move_to(panel.get_center() + UP * 0.1)
+        row = VGroup(a_box, times, b_box, equals, result_box).arrange(RIGHT, buff=0.24, aligned_edge=DOWN)
+        fit_width(row, 10.6)
+        row.move_to(panel.get_center() + UP * 0.25)
 
-        verify = Text(
-            f"check: {u_str} × {v_str} = {result_str}",
-            font_size=22,
-            color=TEXT_DIM,
+        verify = Text(f"check: {a_str} × {b_str} = {result_str}", font_size=22, color=TEXT_DIM)
+        fit_width(verify, 9.8)
+        verify.move_to(panel.get_center() + DOWN * 1.55)
+
+        shimmer = Line(
+            panel.get_left() + RIGHT * 0.65 + DOWN * 0.75,
+            panel.get_right() + LEFT * 0.65 + DOWN * 0.75,
+            color=ACCENT_RESULT,
+            stroke_width=2,
         )
-        fit_width(verify, 9.7)
-        verify.move_to(panel.get_center() + DOWN * 1.45)
 
-        return VGroup(panel, title, row, verify)
+        return VGroup(panel, title, row, shimmer, verify)
 
     def construct(self):
         self.camera.background_color = BG_COLOR
 
-        u_str = U_VALUE.strip()
-        v_str = V_VALUE.strip()
-        if not u_str or not v_str:
+        a_str = U_VALUE.strip()
+        b_str = V_VALUE.strip()
+        if not a_str or not b_str:
             raise ValueError("U_VALUE and V_VALUE must not be empty")
-        if not u_str.isdigit() or not v_str.isdigit():
+        if not a_str.isdigit() or not b_str.isdigit():
             raise ValueError("This visualization currently supports decimal digits only")
 
-        u = string_to_little_endian(u_str)
-        v = string_to_little_endian(v_str)
-        result, steps = karatsuba_steps(u, v, BASE)
+        a = string_to_little_endian(a_str)
+        b = string_to_little_endian(b_str)
+        result, steps = karatsuba_steps(a, b, BASE)
         result_str = little_endian_to_string(result)
 
-        header = self.make_header(u_str, v_str)
-        self.play(FadeIn(header, shift=DOWN * 0.2), run_time=0.8)
+        header = self.make_header(a_str, b_str)
+        self.play(FadeIn(header, shift=DOWN * 0.18), run_time=0.8)
 
-        intro = Text(
-            "One step on screen at a time. Each step fades out before the next one.",
-            font_size=20,
-            color=TEXT_DIM,
-        )
-        intro.next_to(header, DOWN, buff=0.28)
-        self.play(FadeIn(intro, shift=UP * 0.1), run_time=0.55)
-        self.wait(0.6)
-        self.play(FadeOut(intro, shift=UP * 0.1), run_time=0.35)
+        intro_badge = self.make_pill("inspired by elegant long-division choreography", ACCENT_INFO, font_size=18)
+        intro_badge.next_to(header, DOWN, buff=0.28)
+        self.play(FadeIn(intro_badge, shift=UP * 0.08), run_time=0.45)
+        self.wait(INTRO_WAIT)
+        self.play(FadeOut(intro_badge, shift=UP * 0.08), run_time=0.25)
 
         current = None
         total = len(steps)
         for index, step in enumerate(steps, start=1):
-            view = self.build_step_view(step, index, total)
-            current = self.transition_to(current, view)
-            self.wait(STEP_HOLD_TIME)
+            step_type = step["type"]
+            if step_type == "call":
+                current = self.play_call_step(current, step, index, total)
+            elif step_type == "split":
+                current = self.play_split_step(current, step, index, total)
+            elif step_type == "sum_parts":
+                current = self.play_sum_step(current, step, index, total)
+            elif step_type == "base_case":
+                current = self.play_base_case_step(current, step, index, total)
+            elif step_type == "combine_parts":
+                current = self.play_combine_step(current, step, index, total)
+            elif step_type == "return":
+                current = self.play_return_step(current, step, index, total)
 
-        final_view = self.make_final_view(u_str, v_str, result_str)
+        final_view = self.make_final_view(a_str, b_str, result_str)
         self.play(
-            FadeOut(current, shift=UP * TRANSITION_SHIFT),
-            FadeIn(final_view, shift=DOWN * TRANSITION_SHIFT),
+            FadeOut(current, shift=UP * 0.14),
+            FadeIn(final_view, shift=DOWN * 0.14),
             run_time=0.7,
         )
-        self.wait(2.0)
+        self.wait(FINAL_WAIT)
 
 
-class KaratsubaStepByStepScene(MultiplicationScene):
+class MultiplicationScene(KaratsubaUltraBeautifulScene):
+    pass
+
+
+class KaratsubaBeautifulScene(KaratsubaUltraBeautifulScene):
     pass
