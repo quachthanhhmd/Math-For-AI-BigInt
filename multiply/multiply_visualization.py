@@ -1,9 +1,35 @@
 from manimlib import *
 
 
-# =========================
+# ============================================================
+# Editable inputs
+# ============================================================
+U_VALUE = "12345678"
+V_VALUE = "87654321"
+BASE = 10
+
+STEP_RUN_TIME = 0.55
+STEP_HOLD_TIME = 0.22
+TRANSITION_SHIFT = 0.18
+
+BG_COLOR = "#0f1117"
+PANEL_BG = "#141926"
+PANEL_ALT = "#1b2233"
+TEXT_MAIN = WHITE
+TEXT_DIM = GREY_A
+ACCENT_CALL = "#7dd3fc"
+ACCENT_SPLIT = "#a78bfa"
+ACCENT_SUM = "#f59e0b"
+ACCENT_BASE = "#34d399"
+ACCENT_COMBINE = "#f472b6"
+ACCENT_RETURN = "#f87171"
+ACCENT_RESULT = "#facc15"
+LINE_SOFT = GREY_B
+
+
+# ============================================================
 # Numeric helpers
-# =========================
+# ============================================================
 def trim_leading_zeros(arr):
     arr = arr[:]
     while len(arr) > 1 and arr[-1] == 0:
@@ -16,7 +42,7 @@ def string_to_little_endian(num_str):
     if not num_str:
         raise ValueError("Input string must not be empty")
     if not num_str.isdigit():
-        raise ValueError(f"Input must contain only digits, got: {num_str!r}")
+        raise ValueError(f"Input must contain only digits, got {num_str!r}")
     if num_str == "0":
         return [0]
     return [int(ch) for ch in reversed(num_str)]
@@ -100,9 +126,9 @@ def schoolbook_mul_le(a, b, base=10):
     return trim_leading_zeros(result)
 
 
-# =========================
-# Karatsuba trace generator
-# =========================
+# ============================================================
+# Karatsuba step tracer
+# ============================================================
 def karatsuba_steps(a, b, base=10, depth=0, label="root"):
     a = trim_leading_zeros(a[:])
     b = trim_leading_zeros(b[:])
@@ -131,6 +157,8 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
             "type": "base_case",
             "depth": depth,
             "label": label,
+            "a": little_endian_to_string(a),
+            "b": little_endian_to_string(b),
             "result": little_endian_to_string(result),
         })
         return result, steps
@@ -142,15 +170,22 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
     a0, a1 = a[:m], a[m:]
     b0, b1 = b[:m], b[m:]
 
+    a0s = little_endian_to_string(a0)
+    a1s = little_endian_to_string(a1)
+    b0s = little_endian_to_string(b0)
+    b1s = little_endian_to_string(b1)
+
     steps.append({
         "type": "split",
         "depth": depth,
         "label": label,
+        "a": little_endian_to_string(a),
+        "b": little_endian_to_string(b),
         "m": m,
-        "a0": little_endian_to_string(a0),
-        "a1": little_endian_to_string(a1),
-        "b0": little_endian_to_string(b0),
-        "b1": little_endian_to_string(b1),
+        "a0": a0s,
+        "a1": a1s,
+        "b0": b0s,
+        "b1": b1s,
     })
 
     z0, s0 = karatsuba_steps(a0, b0, base, depth + 1, label + ".z0")
@@ -158,13 +193,19 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
 
     sum_a = add_le(a0, a1, base)
     sum_b = add_le(b0, b1, base)
+    sum_a_s = little_endian_to_string(sum_a)
+    sum_b_s = little_endian_to_string(sum_b)
 
     steps.append({
         "type": "sum_parts",
         "depth": depth,
         "label": label,
-        "sum_a": little_endian_to_string(sum_a),
-        "sum_b": little_endian_to_string(sum_b),
+        "sum_a": sum_a_s,
+        "sum_b": sum_b_s,
+        "a0": a0s,
+        "a1": a1s,
+        "b0": b0s,
+        "b1": b1s,
     })
 
     z1_raw, s1 = karatsuba_steps(sum_a, sum_b, base, depth + 1, label + ".z1raw")
@@ -174,14 +215,20 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
     steps.extend(s2)
     steps.extend(s1)
 
+    z0s = little_endian_to_string(z0)
+    z1raws = little_endian_to_string(z1_raw)
+    z2s = little_endian_to_string(z2)
+    z1s = little_endian_to_string(z1)
+
     steps.append({
         "type": "combine_parts",
         "depth": depth,
         "label": label,
-        "z0": little_endian_to_string(z0),
-        "z1": little_endian_to_string(z1),
-        "z2": little_endian_to_string(z2),
         "m": m,
+        "z0": z0s,
+        "z1": z1s,
+        "z2": z2s,
+        "z1_raw": z1raws,
     })
 
     result = add_le(
@@ -200,307 +247,264 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
     return result, steps
 
 
+# ============================================================
+# Formatting helpers
+# ============================================================
+def short_label(label, keep=18):
+    if len(label) <= keep:
+        return label
+    return "..." + label[-keep:]
+
+
+def fit_width(mobj, width):
+    if mobj.get_width() > width:
+        mobj.set_width(width)
+    return mobj
+
+
+def build_digit_row(value, color, title, box_width=4.0):
+    frame = RoundedRectangle(
+        corner_radius=0.16,
+        width=box_width,
+        height=1.2,
+        stroke_color=color,
+        stroke_width=2,
+        fill_color=PANEL_ALT,
+        fill_opacity=1,
+    )
+    label = Text(title, font_size=22, color=TEXT_DIM)
+    digits = Text(str(value), font_size=34, color=color)
+    fit_width(digits, box_width - 0.5)
+    group = VGroup(label, digits).arrange(DOWN, buff=0.14)
+    group.move_to(frame.get_center())
+    return VGroup(frame, group)
+
+
 class MultiplicationScene(Scene):
-    WINDOW_SIZE = 4
-    CARD_W = 6.4
-    CARD_H = 0.95
+    def make_chip(self, text, color, font_size=20, h_buff=0.22, v_buff=0.12):
+        label = Text(text, font_size=font_size, color=color)
+        box = RoundedRectangle(
+            corner_radius=0.14,
+            width=label.get_width() + h_buff * 2,
+            height=label.get_height() + v_buff * 2,
+            stroke_color=color,
+            stroke_width=1.6,
+            fill_color=PANEL_ALT,
+            fill_opacity=1,
+        )
+        label.move_to(box.get_center())
+        return VGroup(box, label)
+
+    def make_header(self, u_str, v_str):
+        title = Text("Karatsuba Multiplication", font_size=34, color=TEXT_MAIN)
+        subtitle = Text("single-focus step-by-step animation", font_size=18, color=TEXT_DIM)
+        title_block = VGroup(title, subtitle).arrange(DOWN, buff=0.08, aligned_edge=LEFT)
+
+        left_box = build_digit_row(u_str, ACCENT_CALL, "multiplicand A", box_width=3.9)
+        right_box = build_digit_row(v_str, ACCENT_BASE, "multiplier B", box_width=3.9)
+        op = Text("×", font_size=36, color=LINE_SOFT)
+        problem_row = VGroup(left_box, op, right_box).arrange(RIGHT, buff=0.28, aligned_edge=DOWN)
+
+        whole = VGroup(title_block, problem_row).arrange(DOWN, buff=0.32)
+        whole.to_edge(UP, buff=0.4)
+        return whole
+
+    def empty_stage_panel(self):
+        panel = RoundedRectangle(
+            corner_radius=0.18,
+            width=11.8,
+            height=4.7,
+            stroke_color=LINE_SOFT,
+            stroke_width=1.8,
+            fill_color=PANEL_BG,
+            fill_opacity=1,
+        )
+        panel.move_to([0, -0.55, 0])
+        return panel
+
+    def build_step_view(self, step, index, total):
+        step_type = step["type"]
+        color = {
+            "call": ACCENT_CALL,
+            "split": ACCENT_SPLIT,
+            "sum_parts": ACCENT_SUM,
+            "base_case": ACCENT_BASE,
+            "combine_parts": ACCENT_COMBINE,
+            "return": ACCENT_RETURN,
+        }[step_type]
+
+        panel = self.empty_stage_panel()
+        top_left = panel.get_corner(UL) + RIGHT * 0.4 + DOWN * 0.34
+        top_right = panel.get_corner(UR) + LEFT * 0.4 + DOWN * 0.34
+
+        kind = self.make_chip(step_type.replace("_", " ").upper(), color, font_size=18)
+        prog = self.make_chip(f"step {index}/{total}", LINE_SOFT, font_size=18)
+        depth_chip = self.make_chip(f"depth {step['depth']}", TEXT_DIM, font_size=17)
+        label_chip = self.make_chip(short_label(step["label"]), TEXT_DIM, font_size=17)
+
+        kind.move_to(top_left + RIGHT * (kind.get_width() / 2))
+        prog.move_to(top_right - RIGHT * (prog.get_width() / 2))
+        depth_chip.next_to(kind, DOWN, buff=0.14, aligned_edge=LEFT)
+        label_chip.next_to(prog, DOWN, buff=0.14, aligned_edge=RIGHT)
+
+        title = Text("", font_size=34, color=TEXT_MAIN)
+        title.move_to(panel.get_center() + UP * 0.9)
+
+        lines = []
+        extras = VGroup()
+
+        if step_type == "call":
+            title = Text("Enter recursion", font_size=32, color=TEXT_MAIN)
+            expr = Text(f"{step['a']} × {step['b']}", font_size=52, color=color)
+            hint = Text("check size and recurse if needed", font_size=20, color=TEXT_DIM)
+            lines = [expr, hint]
+
+        elif step_type == "split":
+            title = Text("Split into high and low parts", font_size=32, color=TEXT_MAIN)
+            line1 = Text(f"A = {step['a1']}·10^{step['m']} + {step['a0']}", font_size=28, color=ACCENT_CALL)
+            line2 = Text(f"B = {step['b1']}·10^{step['m']} + {step['b0']}", font_size=28, color=ACCENT_BASE)
+            line3 = Text(f"m = {step['m']}", font_size=24, color=TEXT_DIM)
+            left_half = build_digit_row(step['a1'], ACCENT_CALL, "A high", box_width=2.3)
+            right_half = build_digit_row(step['a0'], ACCENT_CALL, "A low", box_width=2.3)
+            top_halves = VGroup(left_half, right_half).arrange(RIGHT, buff=0.2)
+            left_half_b = build_digit_row(step['b1'], ACCENT_BASE, "B high", box_width=2.3)
+            right_half_b = build_digit_row(step['b0'], ACCENT_BASE, "B low", box_width=2.3)
+            bottom_halves = VGroup(left_half_b, right_half_b).arrange(RIGHT, buff=0.2)
+            halves = VGroup(top_halves, bottom_halves).arrange(DOWN, buff=0.2)
+            fit_width(halves, 7.8)
+            extras = halves
+            lines = [line1, line2, line3]
+
+        elif step_type == "sum_parts":
+            title = Text("Prepare the middle product", font_size=32, color=TEXT_MAIN)
+            line1 = Text(f"a0 + a1 = {step['a0']} + {step['a1']} = {step['sum_a']}", font_size=27, color=ACCENT_CALL)
+            line2 = Text(f"b0 + b1 = {step['b0']} + {step['b1']} = {step['sum_b']}", font_size=27, color=ACCENT_BASE)
+            line3 = Text(f"Need z1raw = {step['sum_a']} × {step['sum_b']}", font_size=24, color=color)
+            lines = [line1, line2, line3]
+
+        elif step_type == "base_case":
+            title = Text("Base case", font_size=32, color=TEXT_MAIN)
+            expr = Text(f"{step['a']} × {step['b']} = {step['result']}", font_size=42, color=color)
+            hint = Text("small enough → use schoolbook multiplication", font_size=20, color=TEXT_DIM)
+            lines = [expr, hint]
+
+        elif step_type == "combine_parts":
+            title = Text("Combine z0, z1, z2", font_size=32, color=TEXT_MAIN)
+            line1 = Text(f"z0 = {step['z0']}    z2 = {step['z2']}", font_size=28, color=ACCENT_CALL)
+            line2 = Text(f"z1raw = {step['z1_raw']}  →  z1 = {step['z1']}", font_size=28, color=ACCENT_SUM)
+            line3 = Text(f"result = z2·10^{2 * step['m']} + z1·10^{step['m']} + z0", font_size=24, color=color)
+            lines = [line1, line2, line3]
+
+        elif step_type == "return":
+            title = Text("Return result", font_size=32, color=TEXT_MAIN)
+            expr = Text(f"{short_label(step['label'], keep=24)}  →  {step['result']}", font_size=40, color=color)
+            hint = Text("bubble result back to parent call", font_size=20, color=TEXT_DIM)
+            lines = [expr, hint]
+
+        title.move_to(panel.get_center() + UP * 0.95)
+        fit_width(title, 9.5)
+
+        text_objs = VGroup(*lines)
+        text_objs.arrange(DOWN, buff=0.24)
+        fit_width(text_objs, 9.6)
+        text_objs.move_to(panel.get_center() + UP * 0.05)
+
+        if len(extras) > 0:
+            fit_width(extras, 8.2)
+            extras.next_to(text_objs, DOWN, buff=0.35)
+
+        return VGroup(panel, kind, prog, depth_chip, label_chip, title, text_objs, extras)
+
+    def transition_to(self, current_group, next_group):
+        if current_group is None:
+            self.play(FadeIn(next_group, shift=DOWN * TRANSITION_SHIFT), run_time=STEP_RUN_TIME)
+            return next_group
+
+        self.play(
+            FadeOut(current_group, shift=UP * TRANSITION_SHIFT),
+            FadeIn(next_group, shift=DOWN * TRANSITION_SHIFT),
+            run_time=STEP_RUN_TIME,
+        )
+        return next_group
+
+    def make_final_view(self, u_str, v_str, result_str):
+        panel = RoundedRectangle(
+            corner_radius=0.22,
+            width=11.4,
+            height=4.9,
+            stroke_color=ACCENT_RESULT,
+            stroke_width=2.2,
+            fill_color=PANEL_BG,
+            fill_opacity=1,
+        )
+        panel.move_to([0, -0.5, 0])
+
+        title = Text("Final result", font_size=36, color=TEXT_MAIN)
+        title.move_to(panel.get_center() + UP * 1.45)
+
+        a_box = build_digit_row(u_str, ACCENT_CALL, "multiplicand A", box_width=3.15)
+        b_box = build_digit_row(v_str, ACCENT_BASE, "multiplier B", box_width=3.15)
+        r_box = build_digit_row(result_str, ACCENT_RESULT, "result", box_width=4.2)
+
+        times = Text("×", font_size=32, color=LINE_SOFT)
+        equals = Text("=", font_size=32, color=LINE_SOFT)
+        row = VGroup(a_box, times, b_box, equals, r_box).arrange(RIGHT, buff=0.22, aligned_edge=DOWN)
+        fit_width(row, 10.2)
+        row.move_to(panel.get_center() + UP * 0.1)
+
+        verify = Text(
+            f"check: {u_str} × {v_str} = {result_str}",
+            font_size=22,
+            color=TEXT_DIM,
+        )
+        fit_width(verify, 9.7)
+        verify.move_to(panel.get_center() + DOWN * 1.45)
+
+        return VGroup(panel, title, row, verify)
 
     def construct(self):
-        u_str = "12345678"
-        v_str = "87654321"
+        self.camera.background_color = BG_COLOR
+
+        u_str = U_VALUE.strip()
+        v_str = V_VALUE.strip()
+        if not u_str or not v_str:
+            raise ValueError("U_VALUE and V_VALUE must not be empty")
+        if not u_str.isdigit() or not v_str.isdigit():
+            raise ValueError("This visualization currently supports decimal digits only")
 
         u = string_to_little_endian(u_str)
         v = string_to_little_endian(v_str)
-        result, steps = karatsuba_steps(u, v)
+        result, steps = karatsuba_steps(u, v, BASE)
+        result_str = little_endian_to_string(result)
 
-        self.camera.background_color = "#0E1116"
+        header = self.make_header(u_str, v_str)
+        self.play(FadeIn(header, shift=DOWN * 0.2), run_time=0.8)
 
-        header = self.build_header(u_str, v_str)
-        legend = self.build_legend()
-        window_group = self.build_window_panel()
-        focus_group = self.build_focus_panel()
-        footer = self.build_footer(little_endian_to_string(result))
-
-        self.play(FadeIn(header, shift=DOWN))
-        self.play(FadeIn(legend, shift=RIGHT), FadeIn(window_group, shift=UP), FadeIn(focus_group, shift=LEFT))
-
-        panel = window_group.panel
-        visible_cards = []
-
-        for idx, step in enumerate(steps, start=1):
-            card = self.build_step_card(step, idx, len(steps))
-            self.push_step_into_window(card, visible_cards, panel)
-            self.update_focus_panel(focus_group, step, idx, len(steps))
-            self.wait(0.16)
-
-        self.play(FadeIn(footer, shift=UP))
-        self.wait(2)
-
-    def build_header(self, u_str, v_str):
-        box = RoundedRectangle(
-            corner_radius=0.18,
-            width=12.6,
-            height=1.15,
-            stroke_color=GREY_B,
-            stroke_width=1.4,
-            fill_color="#121722",
-            fill_opacity=1,
+        intro = Text(
+            "One step on screen at a time. Each step fades out before the next one.",
+            font_size=20,
+            color=TEXT_DIM,
         )
-        box.to_edge(UP, buff=0.22)
+        intro.next_to(header, DOWN, buff=0.28)
+        self.play(FadeIn(intro, shift=UP * 0.1), run_time=0.55)
+        self.wait(0.6)
+        self.play(FadeOut(intro, shift=UP * 0.1), run_time=0.35)
 
-        title = Text("Karatsuba Multiplication", font_size=30, color=WHITE)
-        subtitle = Text(f"Input: {u_str} x {v_str}", font_size=21, color=GREY_A)
-        text_group = VGroup(title, subtitle).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
-        text_group.move_to(box.get_center())
-        text_group.align_to(box, LEFT).shift(RIGHT * 0.32)
-        return VGroup(box, text_group)
+        current = None
+        total = len(steps)
+        for index, step in enumerate(steps, start=1):
+            view = self.build_step_view(step, index, total)
+            current = self.transition_to(current, view)
+            self.wait(STEP_HOLD_TIME)
 
-    def build_legend(self):
-        frame = RoundedRectangle(
-            corner_radius=0.16,
-            width=3.2,
-            height=3.35,
-            stroke_color=GREY_B,
-            stroke_width=1.2,
-            fill_color="#131823",
-            fill_opacity=1,
-        )
-        frame.to_corner(UL, buff=0.38)
-        frame.shift(DOWN * 1.52)
-
-        title = Text("Step types", font_size=20, color=GREY_A)
-        rows = VGroup(
-            self.legend_row(BLUE_B, "Call"),
-            self.legend_row(TEAL_B, "Split"),
-            self.legend_row(GREEN_B, "Sum parts"),
-            self.legend_row(ORANGE, "Base case"),
-            self.legend_row(PURPLE_B, "Combine"),
-            self.legend_row(YELLOW_B, "Return"),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        body = VGroup(title, rows).arrange(DOWN, aligned_edge=LEFT, buff=0.18)
-        body.move_to(frame.get_center())
-        body.align_to(frame, LEFT).shift(RIGHT * 0.22)
-        return VGroup(frame, body)
-
-    def legend_row(self, color, label):
-        dot = Dot(radius=0.045, color=color)
-        text = Text(label, font_size=16, color=GREY_A)
-        return VGroup(dot, text).arrange(RIGHT, buff=0.12)
-
-    def build_window_panel(self):
-        panel = RoundedRectangle(
-            corner_radius=0.18,
-            width=6.95,
-            height=4.65,
-            stroke_color=GREY_B,
-            stroke_width=1.3,
-            fill_color="#121722",
-            fill_opacity=1,
-        )
-        panel.move_to(np.array([0.2, -0.95, 0]))
-
-        title = Text("Recent steps", font_size=22, color=GREY_A)
-        title.next_to(panel.get_top(), DOWN, buff=0.14)
-        title.align_to(panel, LEFT).shift(RIGHT * 0.22)
-
-        hint = Text("Sliding window", font_size=15, color=GREY_C)
-        hint.next_to(title, RIGHT, buff=0.22)
-
-        group = VGroup(panel, title, hint)
-        group.panel = panel
-        return group
-
-    def build_focus_panel(self):
-        frame = RoundedRectangle(
-            corner_radius=0.18,
-            width=3.75,
-            height=4.65,
-            stroke_color=GREY_B,
-            stroke_width=1.3,
-            fill_color="#121722",
-            fill_opacity=1,
-        )
-        frame.to_edge(RIGHT, buff=0.45)
-        frame.shift(DOWN * 0.95)
-
-        title = Text("Current focus", font_size=22, color=GREY_A)
-        title.next_to(frame.get_top(), DOWN, buff=0.14)
-        title.align_to(frame, LEFT).shift(RIGHT * 0.22)
-
-        headline = Text("Waiting", font_size=20, color=WHITE)
-        headline.move_to(frame.get_center() + UP * 1.25)
-
-        line1 = Text("A compact summary of", font_size=18, color=GREY_A)
-        line2 = Text("the active step appears here.", font_size=18, color=GREY_A)
-        body = VGroup(line1, line2).arrange(DOWN, buff=0.12)
-        body.move_to(frame.get_center() + UP * 0.3)
-
-        chip = RoundedRectangle(
-            corner_radius=0.12,
-            width=2.8,
-            height=0.55,
-            stroke_color=BLUE_B,
-            stroke_width=1.2,
-            fill_color="#182234",
-            fill_opacity=1,
-        )
-        chip.move_to(frame.get_center() + DOWN * 1.0)
-        chip_text = Text("z = z2*B^(2m) + z1*B^m + z0", font_size=14, color=BLUE_B)
-        chip_text.move_to(chip.get_center())
-        chip_text.set_width(2.45)
-
-        group = VGroup(frame, title, headline, body, chip, chip_text)
-        group.meta_headline = headline
-        group.meta_body = body
-        group.meta_chip = chip_text
-        return group
-
-    def build_footer(self, result_text):
-        frame = RoundedRectangle(
-            corner_radius=0.15,
-            width=12.0,
-            height=0.78,
-            stroke_color=YELLOW_B,
-            stroke_width=1.4,
-            fill_color="#211A10",
-            fill_opacity=1,
-        )
-        frame.to_edge(DOWN, buff=0.22)
-        text = Text(f"Final result = {result_text}", font_size=24, color=YELLOW_B)
-        text.move_to(frame.get_center())
-        return VGroup(frame, text)
-
-    def build_step_card(self, step, idx, total):
-        color = self.color_for_step(step["type"])
-        title_text, detail_text = self.card_copy(step)
-
-        card = RoundedRectangle(
-            corner_radius=0.12,
-            width=self.CARD_W,
-            height=self.CARD_H,
-            stroke_color=color,
-            stroke_width=1.4,
-            fill_color="#18202B",
-            fill_opacity=1,
-        )
-
-        meta = Text(
-            f"{step['type'].upper()}   depth={step.get('depth', 0)}   {idx}/{total}",
-            font_size=14,
-            color=color,
-        )
-        headline = Text(title_text, font_size=20, color=WHITE)
-        detail = Text(detail_text, font_size=15, color=GREY_A)
-
-        headline.set_width(self.CARD_W - 0.45)
-        detail.set_width(self.CARD_W - 0.45)
-
-        text_group = VGroup(meta, headline, detail).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
-        text_group.move_to(card.get_center())
-        text_group.align_to(card, LEFT).shift(RIGHT * 0.18)
-
-        return VGroup(card, text_group)
-
-    def push_step_into_window(self, new_card, visible_cards, panel):
-        animations = []
-        if len(visible_cards) >= self.WINDOW_SIZE:
-            outgoing = visible_cards.pop(0)
-            animations.append(FadeOut(outgoing, shift=UP * 0.18))
-
-        visible_cards.append(new_card)
-        self.position_cards(visible_cards, panel)
-
-        new_card.set_opacity(0)
-        self.add(new_card)
-        animations.append(FadeIn(new_card, shift=DOWN * 0.15))
-
-        targets = self.card_targets(panel, len(visible_cards))
-        for mob, target in zip(visible_cards, targets):
-            animations.append(mob.animate.move_to(target))
-
-        self.play(*animations, run_time=0.35)
-
-    def position_cards(self, cards, panel):
-        targets = self.card_targets(panel, len(cards))
-        for mob, target in zip(cards, targets):
-            mob.move_to(target)
-
-    def card_targets(self, panel, count):
-        left_x = panel.get_left()[0] + 0.2 + self.CARD_W / 2
-        first_y = panel.get_top()[1] - 0.9
-        gap = 1.02
-        return [np.array([left_x, first_y - i * gap, 0]) for i in range(count)]
-
-    def update_focus_panel(self, focus_group, step, idx, total):
-        header, line_a, line_b, chip = self.focus_copy(step, idx, total)
-
-        new_headline = Text(header, font_size=20, color=self.color_for_step(step["type"]))
-        new_headline.move_to(focus_group.meta_headline)
-        new_headline.set_width(3.0)
-
-        new_body = VGroup(
-            Text(line_a, font_size=17, color=GREY_A),
-            Text(line_b, font_size=17, color=GREY_A),
-        ).arrange(DOWN, buff=0.12)
-        new_body.move_to(focus_group.meta_body)
-        new_body.set_width(3.05)
-
-        new_chip = Text(chip, font_size=14, color=BLUE_B)
-        new_chip.move_to(focus_group.meta_chip)
-        new_chip.set_width(2.45)
-
+        final_view = self.make_final_view(u_str, v_str, result_str)
         self.play(
-            Transform(focus_group.meta_headline, new_headline),
-            Transform(focus_group.meta_body, new_body),
-            Transform(focus_group.meta_chip, new_chip),
-            run_time=0.22,
+            FadeOut(current, shift=UP * TRANSITION_SHIFT),
+            FadeIn(final_view, shift=DOWN * TRANSITION_SHIFT),
+            run_time=0.7,
         )
-
-    def color_for_step(self, step_type):
-        return {
-            "call": BLUE_B,
-            "split": TEAL_B,
-            "sum_parts": GREEN_B,
-            "base_case": ORANGE,
-            "combine_parts": PURPLE_B,
-            "return": YELLOW_B,
-        }.get(step_type, GREY_B)
-
-    def short_label(self, label, limit=18):
-        if len(label) <= limit:
-            return label
-        return "..." + label[-(limit - 3):]
-
-    def card_copy(self, step):
-        label = self.short_label(step.get("label", ""))
-        step_type = step["type"]
-        if step_type == "call":
-            return (f"Enter {label}", f"Multiply {step['a']} x {step['b']}")
-        if step_type == "split":
-            return (f"Split with m = {step['m']}", f"a: {step['a1']}|{step['a0']}    b: {step['b1']}|{step['b0']}")
-        if step_type == "sum_parts":
-            return ("Build middle product", f"({step['sum_a']}) x ({step['sum_b']})")
-        if step_type == "base_case":
-            return (f"Base case at {label}", f"result = {step['result']}")
-        if step_type == "combine_parts":
-            return ("Combine z0, z1, z2", f"z0={step['z0']}  z1={step['z1']}  z2={step['z2']}")
-        return (f"Return {label}", f"result = {step['result']}")
-
-    def focus_copy(self, step, idx, total):
-        step_type = step["type"]
-        progress = f"step {idx}/{total}"
-        if step_type == "call":
-            return ("Enter recursion", progress, f"subproblem: {self.short_label(step['label'], 24)}", "recurse until n <= 2")
-        if step_type == "split":
-            return ("Split operands", progress, f"m = {step['m']}", "a = a1*B^m + a0")
-        if step_type == "sum_parts":
-            return ("Prepare z1 raw", progress, f"sum_a={step['sum_a']}, sum_b={step['sum_b']}", "z1 = z1raw - z2 - z0")
-        if step_type == "base_case":
-            return ("Direct multiply", progress, f"small product = {step['result']}", "schoolbook multiply")
-        if step_type == "combine_parts":
-            return ("Merge pieces", progress, f"m = {step['m']}", "z = z2*B^(2m) + z1*B^m + z0")
-        return ("Return upward", progress, f"value = {step['result']}", "pass result to caller")
+        self.wait(2.0)
 
 
-class KaratsubaScene(MultiplicationScene):
+class KaratsubaStepByStepScene(MultiplicationScene):
     pass
