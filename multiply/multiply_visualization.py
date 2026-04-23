@@ -200,11 +200,10 @@ def karatsuba_steps(a, b, base=10, depth=0, label="root"):
     return result, steps
 
 
-# =========================
-# Scene
-# =========================
 class MultiplicationScene(Scene):
-    WINDOW_SIZE = 6
+    WINDOW_SIZE = 4
+    CARD_W = 6.4
+    CARD_H = 0.95
 
     def construct(self):
         u_str = "12345678"
@@ -214,254 +213,249 @@ class MultiplicationScene(Scene):
         v = string_to_little_endian(v_str)
         result, steps = karatsuba_steps(u, v)
 
-        self.camera.background_color = "#0F1117"
+        self.camera.background_color = "#0E1116"
 
         header = self.build_header(u_str, v_str)
         legend = self.build_legend()
-        panel = self.build_window_panel()
-        formula_card = self.build_formula_card()
+        window_group = self.build_window_panel()
+        focus_group = self.build_focus_panel()
         footer = self.build_footer(little_endian_to_string(result))
 
-        self.play(FadeIn(header, shift=DOWN), FadeIn(legend, shift=LEFT))
-        self.play(FadeIn(panel, shift=UP), FadeIn(formula_card, shift=RIGHT))
+        self.play(FadeIn(header, shift=DOWN))
+        self.play(FadeIn(legend, shift=RIGHT), FadeIn(window_group, shift=UP), FadeIn(focus_group, shift=LEFT))
 
+        panel = window_group.panel
         visible_cards = []
 
         for idx, step in enumerate(steps, start=1):
-            step_card = self.build_step_card(step, idx, len(steps))
-            self.push_step_into_window(step_card, visible_cards, panel)
-            self.update_formula_card(formula_card, step)
-            self.wait(0.2)
+            card = self.build_step_card(step, idx, len(steps))
+            self.push_step_into_window(card, visible_cards, panel)
+            self.update_focus_panel(focus_group, step, idx, len(steps))
+            self.wait(0.16)
 
         self.play(FadeIn(footer, shift=UP))
         self.wait(2)
 
-    # ---------- Layout ----------
     def build_header(self, u_str, v_str):
-        title = Text("Karatsuba Multiplication", font_size=38, color=BLUE_B)
-        subtitle = Text(
-            f"Input: {u_str} × {v_str}",
-            font_size=24,
-            color=GREY_A,
-        )
-        text_group = VGroup(title, subtitle).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-
         box = RoundedRectangle(
             corner_radius=0.18,
-            height=1.25,
-            width=12.8,
+            width=12.6,
+            height=1.15,
             stroke_color=GREY_B,
-            stroke_width=1.5,
-            fill_color="#171A21",
+            stroke_width=1.4,
+            fill_color="#121722",
             fill_opacity=1,
         )
-        text_group.move_to(box.get_center())
-        text_group.align_to(box, LEFT).shift(RIGHT * 0.35)
+        box.to_edge(UP, buff=0.22)
 
-        group = VGroup(box, text_group)
-        group.to_edge(UP, buff=0.2)
-        return group
+        title = Text("Karatsuba Multiplication", font_size=30, color=WHITE)
+        subtitle = Text(f"Input: {u_str} x {v_str}", font_size=21, color=GREY_A)
+        text_group = VGroup(title, subtitle).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
+        text_group.move_to(box.get_center())
+        text_group.align_to(box, LEFT).shift(RIGHT * 0.32)
+        return VGroup(box, text_group)
 
     def build_legend(self):
-        legend_title = Text("Step types", font_size=22, color=GREY_A)
-        entries = VGroup(
-            self.legend_row(BLUE_B, "Call / recursion entry"),
-            self.legend_row(TEAL_B, "Split operands"),
-            self.legend_row(GREEN_B, "Compute sums"),
-            self.legend_row(ORANGE, "Base-case multiply"),
-            self.legend_row(PURPLE_B, "Combine z0, z1, z2"),
-            self.legend_row(YELLOW_B, "Return result"),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.14)
-
-        body = VGroup(legend_title, entries).arrange(DOWN, aligned_edge=LEFT, buff=0.18)
         frame = RoundedRectangle(
             corner_radius=0.16,
-            height=3.15,
-            width=3.5,
+            width=3.2,
+            height=3.35,
             stroke_color=GREY_B,
             stroke_width=1.2,
-            fill_color="#151821",
+            fill_color="#131823",
             fill_opacity=1,
         )
-        body.move_to(frame.get_center())
-        body.align_to(frame, LEFT).shift(RIGHT * 0.25)
-        group = VGroup(frame, body)
-        group.to_corner(UL, buff=0.45)
-        group.shift(DOWN * 1.15)
-        return group
+        frame.to_corner(UL, buff=0.38)
+        frame.shift(DOWN * 1.52)
 
-    def legend_row(self, color, text):
-        dot = Dot(radius=0.06, color=color)
-        label = Text(text, font_size=17, color=GREY_A)
-        return VGroup(dot, label).arrange(RIGHT, buff=0.12)
+        title = Text("Step types", font_size=20, color=GREY_A)
+        rows = VGroup(
+            self.legend_row(BLUE_B, "Call"),
+            self.legend_row(TEAL_B, "Split"),
+            self.legend_row(GREEN_B, "Sum parts"),
+            self.legend_row(ORANGE, "Base case"),
+            self.legend_row(PURPLE_B, "Combine"),
+            self.legend_row(YELLOW_B, "Return"),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
+        body = VGroup(title, rows).arrange(DOWN, aligned_edge=LEFT, buff=0.18)
+        body.move_to(frame.get_center())
+        body.align_to(frame, LEFT).shift(RIGHT * 0.22)
+        return VGroup(frame, body)
+
+    def legend_row(self, color, label):
+        dot = Dot(radius=0.045, color=color)
+        text = Text(label, font_size=16, color=GREY_A)
+        return VGroup(dot, text).arrange(RIGHT, buff=0.12)
 
     def build_window_panel(self):
         panel = RoundedRectangle(
             corner_radius=0.18,
-            height=5.55,
-            width=8.1,
+            width=6.95,
+            height=4.65,
             stroke_color=GREY_B,
-            stroke_width=1.4,
-            fill_color="#12151C",
+            stroke_width=1.3,
+            fill_color="#121722",
             fill_opacity=1,
         )
-        panel.to_edge(LEFT, buff=3.8)
-        panel.shift(DOWN * 0.85)
+        panel.move_to(np.array([0.2, -0.95, 0]))
 
-        title = Text("Sliding window of recent steps", font_size=24, color=GREY_A)
-        title.next_to(panel.get_top(), DOWN, buff=0.16)
-        title.align_to(panel, LEFT)
-        title.shift(RIGHT * 0.22)
+        title = Text("Recent steps", font_size=22, color=GREY_A)
+        title.next_to(panel.get_top(), DOWN, buff=0.14)
+        title.align_to(panel, LEFT).shift(RIGHT * 0.22)
 
-        self.add(panel, title)
-        return panel
+        hint = Text("Sliding window", font_size=15, color=GREY_C)
+        hint.next_to(title, RIGHT, buff=0.22)
 
-    def build_formula_card(self):
+        group = VGroup(panel, title, hint)
+        group.panel = panel
+        return group
+
+    def build_focus_panel(self):
         frame = RoundedRectangle(
             corner_radius=0.18,
-            height=5.55,
-            width=4.25,
+            width=3.75,
+            height=4.65,
             stroke_color=GREY_B,
-            stroke_width=1.4,
-            fill_color="#12151C",
+            stroke_width=1.3,
+            fill_color="#121722",
             fill_opacity=1,
         )
         frame.to_edge(RIGHT, buff=0.45)
-        frame.shift(DOWN * 0.85)
+        frame.shift(DOWN * 0.95)
 
-        title = Text("Current focus", font_size=24, color=GREY_A)
-        title.next_to(frame.get_top(), DOWN, buff=0.16)
-        title.align_to(frame, LEFT)
-        title.shift(RIGHT * 0.22)
+        title = Text("Current focus", font_size=22, color=GREY_A)
+        title.next_to(frame.get_top(), DOWN, buff=0.14)
+        title.align_to(frame, LEFT).shift(RIGHT * 0.22)
 
-        headline = Text("Waiting for step...", font_size=22, color=WHITE)
-        headline.move_to(frame.get_center() + UP * 1.2)
+        headline = Text("Waiting", font_size=20, color=WHITE)
+        headline.move_to(frame.get_center() + UP * 1.25)
 
-        body = Text("Karatsuba splits, recurses, then combines.", font_size=20, color=GREY_A)
-        body.set_width(3.6)
-        body.move_to(frame.get_center())
+        line1 = Text("A compact summary of", font_size=18, color=GREY_A)
+        line2 = Text("the active step appears here.", font_size=18, color=GREY_A)
+        body = VGroup(line1, line2).arrange(DOWN, buff=0.12)
+        body.move_to(frame.get_center() + UP * 0.3)
 
-        formula = Text("z = z2·B^(2m) + z1·B^m + z0", font_size=21, color=BLUE_B)
-        formula.set_width(3.7)
-        formula.move_to(frame.get_center() + DOWN * 1.35)
+        chip = RoundedRectangle(
+            corner_radius=0.12,
+            width=2.8,
+            height=0.55,
+            stroke_color=BLUE_B,
+            stroke_width=1.2,
+            fill_color="#182234",
+            fill_opacity=1,
+        )
+        chip.move_to(frame.get_center() + DOWN * 1.0)
+        chip_text = Text("z = z2*B^(2m) + z1*B^m + z0", font_size=14, color=BLUE_B)
+        chip_text.move_to(chip.get_center())
+        chip_text.set_width(2.45)
 
-        group = VGroup(frame, title, headline, body, formula)
+        group = VGroup(frame, title, headline, body, chip, chip_text)
         group.meta_headline = headline
         group.meta_body = body
-        group.meta_formula = formula
+        group.meta_chip = chip_text
         return group
 
     def build_footer(self, result_text):
         frame = RoundedRectangle(
-            corner_radius=0.18,
-            height=0.95,
-            width=12.4,
+            corner_radius=0.15,
+            width=12.0,
+            height=0.78,
             stroke_color=YELLOW_B,
-            stroke_width=1.6,
-            fill_color="#221B10",
+            stroke_width=1.4,
+            fill_color="#211A10",
             fill_opacity=1,
         )
-        frame.to_edge(DOWN, buff=0.25)
-
-        text = Text(
-            f"Final result = {result_text}",
-            font_size=30,
-            color=YELLOW_B,
-        )
+        frame.to_edge(DOWN, buff=0.22)
+        text = Text(f"Final result = {result_text}", font_size=24, color=YELLOW_B)
         text.move_to(frame.get_center())
         return VGroup(frame, text)
 
-    # ---------- Step rendering ----------
     def build_step_card(self, step, idx, total):
         color = self.color_for_step(step["type"])
-        text_lines = self.describe_step(step)
-
-        badge = Text(f"{idx}/{total}", font_size=16, color=GREY_A)
-        tag = Text(step["type"].upper(), font_size=16, color=color)
-        depth = Text(f"depth={step.get('depth', 0)}", font_size=16, color=GREY_A)
-        top_row = VGroup(tag, depth, badge).arrange(RIGHT, buff=0.25)
-
-        body_items = [Text(line, font_size=18, color=WHITE) for line in text_lines]
-        body = VGroup(*body_items).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
-        body.set_width(6.7)
+        title_text, detail_text = self.card_copy(step)
 
         card = RoundedRectangle(
             corner_radius=0.12,
-            height=max(0.78, 0.46 + 0.34 * (len(text_lines) + 1)),
-            width=7.35,
+            width=self.CARD_W,
+            height=self.CARD_H,
             stroke_color=color,
-            stroke_width=1.6,
-            fill_color="#1A1F29",
+            stroke_width=1.4,
+            fill_color="#18202B",
             fill_opacity=1,
         )
 
-        content = VGroup(top_row, body).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        content.move_to(card.get_center())
-        content.align_to(card, LEFT).shift(RIGHT * 0.2)
+        meta = Text(
+            f"{step['type'].upper()}   depth={step.get('depth', 0)}   {idx}/{total}",
+            font_size=14,
+            color=color,
+        )
+        headline = Text(title_text, font_size=20, color=WHITE)
+        detail = Text(detail_text, font_size=15, color=GREY_A)
 
-        return VGroup(card, content)
+        headline.set_width(self.CARD_W - 0.45)
+        detail.set_width(self.CARD_W - 0.45)
+
+        text_group = VGroup(meta, headline, detail).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
+        text_group.move_to(card.get_center())
+        text_group.align_to(card, LEFT).shift(RIGHT * 0.18)
+
+        return VGroup(card, text_group)
 
     def push_step_into_window(self, new_card, visible_cards, panel):
-        anchor_x = panel.get_center()[0]
-        base_top = panel.get_top()[1] - 0.65
-        spacing = 0.12
-
-        new_card.move_to([anchor_x, base_top, 0])
-        new_card.align_to(panel, LEFT)
-        new_card.shift(RIGHT * 0.35)
-
         animations = []
-        if len(visible_cards) < self.WINDOW_SIZE:
-            target_y = self.compute_y_positions(panel, len(visible_cards) + 1)[-1]
-            new_card.move_to([anchor_x, target_y + 0.3, 0])
-            new_card.align_to(panel, LEFT)
-            new_card.shift(RIGHT * 0.35)
-            animations.append(FadeIn(new_card, shift=UP * 0.2))
-            visible_cards.append(new_card)
-        else:
-            old_first = visible_cards.pop(0)
-            animations.append(FadeOut(old_first, shift=UP * 0.2))
-            visible_cards.append(new_card)
-            animations.append(FadeIn(new_card, shift=DOWN * 0.2))
+        if len(visible_cards) >= self.WINDOW_SIZE:
+            outgoing = visible_cards.pop(0)
+            animations.append(FadeOut(outgoing, shift=UP * 0.18))
 
-        y_positions = self.compute_y_positions(panel, len(visible_cards))
-        for mob, y in zip(visible_cards, y_positions):
-            animations.append(mob.animate.move_to([anchor_x, y, 0]).align_to(panel, LEFT).shift(RIGHT * 0.35))
+        visible_cards.append(new_card)
+        self.position_cards(visible_cards, panel)
 
-        self.play(*animations, run_time=0.45)
+        new_card.set_opacity(0)
+        self.add(new_card)
+        animations.append(FadeIn(new_card, shift=DOWN * 0.15))
 
-    def compute_y_positions(self, panel, count):
-        top_y = panel.get_top()[1] - 0.72
-        positions = []
-        current_y = top_y
-        for _ in range(count):
-            positions.append(current_y)
-            current_y -= 0.82
-        return positions
+        targets = self.card_targets(panel, len(visible_cards))
+        for mob, target in zip(visible_cards, targets):
+            animations.append(mob.animate.move_to(target))
 
-    def update_formula_card(self, formula_card, step):
-        headline_text, body_text, formula_text = self.focus_copy(step)
+        self.play(*animations, run_time=0.35)
 
-        new_headline = Text(headline_text, font_size=22, color=self.color_for_step(step["type"]))
-        new_headline.move_to(formula_card.meta_headline)
-        new_headline.set_width(3.6)
+    def position_cards(self, cards, panel):
+        targets = self.card_targets(panel, len(cards))
+        for mob, target in zip(cards, targets):
+            mob.move_to(target)
 
-        new_body = Text(body_text, font_size=20, color=GREY_A)
-        new_body.set_width(3.6)
-        new_body.move_to(formula_card.meta_body)
+    def card_targets(self, panel, count):
+        left_x = panel.get_left()[0] + 0.2 + self.CARD_W / 2
+        first_y = panel.get_top()[1] - 0.9
+        gap = 1.02
+        return [np.array([left_x, first_y - i * gap, 0]) for i in range(count)]
 
-        new_formula = Text(formula_text, font_size=21, color=BLUE_B)
-        new_formula.set_width(3.7)
-        new_formula.move_to(formula_card.meta_formula)
+    def update_focus_panel(self, focus_group, step, idx, total):
+        header, line_a, line_b, chip = self.focus_copy(step, idx, total)
+
+        new_headline = Text(header, font_size=20, color=self.color_for_step(step["type"]))
+        new_headline.move_to(focus_group.meta_headline)
+        new_headline.set_width(3.0)
+
+        new_body = VGroup(
+            Text(line_a, font_size=17, color=GREY_A),
+            Text(line_b, font_size=17, color=GREY_A),
+        ).arrange(DOWN, buff=0.12)
+        new_body.move_to(focus_group.meta_body)
+        new_body.set_width(3.05)
+
+        new_chip = Text(chip, font_size=14, color=BLUE_B)
+        new_chip.move_to(focus_group.meta_chip)
+        new_chip.set_width(2.45)
 
         self.play(
-            Transform(formula_card.meta_headline, new_headline),
-            Transform(formula_card.meta_body, new_body),
-            Transform(formula_card.meta_formula, new_formula),
-            run_time=0.28,
+            Transform(focus_group.meta_headline, new_headline),
+            Transform(focus_group.meta_body, new_body),
+            Transform(focus_group.meta_chip, new_chip),
+            run_time=0.22,
         )
 
-    # ---------- Content helpers ----------
     def color_for_step(self, step_type):
         return {
             "call": BLUE_B,
@@ -472,81 +466,41 @@ class MultiplicationScene(Scene):
             "return": YELLOW_B,
         }.get(step_type, GREY_B)
 
-    def describe_step(self, step):
+    def short_label(self, label, limit=18):
+        if len(label) <= limit:
+            return label
+        return "..." + label[-(limit - 3):]
+
+    def card_copy(self, step):
+        label = self.short_label(step.get("label", ""))
         step_type = step["type"]
         if step_type == "call":
-            return [
-                f"Label: {step['label']}",
-                f"Multiply {step['a']} × {step['b']}",
-            ]
+            return (f"Enter {label}", f"Multiply {step['a']} x {step['b']}")
         if step_type == "split":
-            return [
-                f"m = {step['m']}",
-                f"a = a1|a0 = {step['a1']} | {step['a0']}",
-                f"b = b1|b0 = {step['b1']} | {step['b0']}",
-            ]
+            return (f"Split with m = {step['m']}", f"a: {step['a1']}|{step['a0']}    b: {step['b1']}|{step['b0']}")
         if step_type == "sum_parts":
-            return [
-                f"a0 + a1 = {step['sum_a']}",
-                f"b0 + b1 = {step['sum_b']}",
-                "Prepare raw middle product",
-            ]
+            return ("Build middle product", f"({step['sum_a']}) x ({step['sum_b']})")
         if step_type == "base_case":
-            return [
-                f"Direct multiply at {step['label']}",
-                f"result = {step['result']}",
-            ]
+            return (f"Base case at {label}", f"result = {step['result']}")
         if step_type == "combine_parts":
-            return [
-                f"z0 = {step['z0']}",
-                f"z1 = {step['z1']}",
-                f"z2 = {step['z2']}",
-                f"Assemble with m = {step['m']}",
-            ]
-        return [
-            f"Return from {step['label']}",
-            f"result = {step['result']}",
-        ]
+            return ("Combine z0, z1, z2", f"z0={step['z0']}  z1={step['z1']}  z2={step['z2']}")
+        return (f"Return {label}", f"result = {step['result']}")
 
-    def focus_copy(self, step):
+    def focus_copy(self, step, idx, total):
         step_type = step["type"]
+        progress = f"step {idx}/{total}"
         if step_type == "call":
-            return (
-                "Enter recursion",
-                f"Work on subproblem {step['label']}: {step['a']} × {step['b']}",
-                "Recurse until size <= 2",
-            )
+            return ("Enter recursion", progress, f"subproblem: {self.short_label(step['label'], 24)}", "recurse until n <= 2")
         if step_type == "split":
-            return (
-                "Split inputs",
-                f"Break each number into low/high halves with m = {step['m']}",
-                "a = a1·B^m + a0,  b = b1·B^m + b0",
-            )
+            return ("Split operands", progress, f"m = {step['m']}", "a = a1*B^m + a0")
         if step_type == "sum_parts":
-            return (
-                "Build middle term",
-                "Add halves first, then recurse on (a0+a1)(b0+b1)",
-                "z1 = z1raw - z2 - z0",
-            )
+            return ("Prepare z1 raw", progress, f"sum_a={step['sum_a']}, sum_b={step['sum_b']}", "z1 = z1raw - z2 - z0")
         if step_type == "base_case":
-            return (
-                "Base case",
-                f"Small enough to multiply directly at {step['label']}",
-                f"result = {step['result']}",
-            )
+            return ("Direct multiply", progress, f"small product = {step['result']}", "schoolbook multiply")
         if step_type == "combine_parts":
-            return (
-                "Combine subproducts",
-                "Merge low, middle, and high contributions into one value",
-                "z = z2·B^(2m) + z1·B^m + z0",
-            )
-        return (
-            "Propagate upward",
-            f"Subproblem {step['label']} finishes with result {step['result']}",
-            "Return to caller",
-        )
+            return ("Merge pieces", progress, f"m = {step['m']}", "z = z2*B^(2m) + z1*B^m + z0")
+        return ("Return upward", progress, f"value = {step['result']}", "pass result to caller")
 
 
-# Optional alias if the render command expects a different class name.
 class KaratsubaScene(MultiplicationScene):
     pass
