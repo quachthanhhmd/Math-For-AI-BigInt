@@ -297,9 +297,11 @@ def accent_for_step(step_type):
 
 class KaratsubaCleanLayoutScene(Scene):
     STAGE_W = 11.6
-    STAGE_H = 5.0
+    STAGE_H = 4.85
     CONTENT_W = 9.7
-    CONTENT_H = 3.2
+    CONTENT_H = 3.0
+    HEADER_STAGE_GAP = 0.42
+    STAGE_BOTTOM_MARGIN = 0.38
 
     def make_pill(self, text, color, font_size=18, fill=SURFACE_2):
         label = Text(text, font_size=font_size, color=color)
@@ -333,6 +335,11 @@ class KaratsubaCleanLayoutScene(Scene):
         group.move_to(frame.get_center())
         return VGroup(frame, group)
 
+    def get_stage_center_y(self):
+        top_from_header = getattr(self, "stage_top_y", 1.35) - self.STAGE_H / 2
+        bottom_limit = -FRAME_Y_RADIUS + self.STAGE_BOTTOM_MARGIN + self.STAGE_H / 2
+        return max(top_from_header, bottom_limit)
+
     def make_stage(self):
         outer = RoundedRectangle(
             corner_radius=0.22,
@@ -343,7 +350,7 @@ class KaratsubaCleanLayoutScene(Scene):
             fill_color=SURFACE,
             fill_opacity=1,
         )
-        outer.move_to([0, -0.55, 0])
+        outer.move_to([0, self.get_stage_center_y(), 0])
         return outer
 
     def make_header(self, a_str, b_str):
@@ -398,17 +405,17 @@ class KaratsubaCleanLayoutScene(Scene):
 
         title = self.make_text_line(title_text, font_size=30, color=TEXT_MAIN)
         fit_width(title, self.CONTENT_W)
-        title.move_to(panel.get_center() + UP * 1.5)
+        title.move_to(panel.get_center() + UP * 1.18)
 
         divider = Line(
-            panel.get_left() + RIGHT * 0.45 + UP * 0.95,
-            panel.get_right() + LEFT * 0.45 + UP * 0.95,
+            panel.get_left() + RIGHT * 0.45 + UP * 0.58,
+            panel.get_right() + LEFT * 0.45 + UP * 0.58,
             color=SURFACE_2,
             stroke_width=2,
         )
 
         content = self.make_content_stack(*content_items)
-        content.move_to(panel.get_center() + DOWN * 0.35)
+        content.move_to(panel.get_center() + DOWN * 0.48)
 
         return VGroup(panel, meta, title, divider, content)
 
@@ -558,10 +565,10 @@ class KaratsubaCleanLayoutScene(Scene):
             fill_color=SURFACE,
             fill_opacity=1,
         )
-        panel.move_to([0, -0.55, 0])
+        panel.move_to([0, self.get_stage_center_y(), 0])
 
         title = self.make_text_line("Final result", font_size=34, color=TEXT_MAIN)
-        title.move_to(panel.get_center() + UP * 1.5)
+        title.move_to(panel.get_center() + UP * 1.15)
 
         row = VGroup(
             self.make_value_box("A", a_str, ACCENT_A, width=2.7),
@@ -571,11 +578,11 @@ class KaratsubaCleanLayoutScene(Scene):
             self.make_value_box("A × B", result_str, ACCENT_RESULT, width=3.4),
         ).arrange(RIGHT, buff=0.18, aligned_edge=DOWN)
         fit_width(row, self.CONTENT_W)
-        row.move_to(panel.get_center() + UP * 0.2)
+        row.move_to(panel.get_center() + UP * 0.05)
 
         verify = self.make_text_line(f"check: {a_str} × {b_str} = {result_str}", font_size=21, color=TEXT_DIM)
         fit_width(verify, self.CONTENT_W)
-        verify.move_to(panel.get_center() + DOWN * 1.45)
+        verify.move_to(panel.get_center() + DOWN * 1.22)
         return VGroup(panel, title, row, verify)
 
     def construct(self):
@@ -595,6 +602,8 @@ class KaratsubaCleanLayoutScene(Scene):
 
         header = self.make_header(a_str, b_str)
         self.play(FadeIn(header, shift=DOWN * 0.18), run_time=0.75)
+
+        self.stage_top_y = header.get_bottom()[1] - self.HEADER_STAGE_GAP
 
         intro = self.make_pill("bounded layout: one step, one card, no overlap", ACCENT_INFO, font_size=17)
         intro.next_to(header, DOWN, buff=0.25)
