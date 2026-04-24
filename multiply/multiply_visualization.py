@@ -4,17 +4,38 @@ from manimlib import *
 # ============================================================
 # Editable inputs
 # ============================================================
-U_VALUE = "12345678"
-V_VALUE = "87654321"
+U_VALUE = "1234"
+V_VALUE = "5678"
 BASE = 10
 
 # Timing
-INTRO_WAIT = 0.5
-STEP_IN_TIME = 0.4
-STEP_OUT_TIME = 0.28
-STEP_HOLD = 0.38
-ITEM_TIME = 0.45
-FINAL_WAIT = 2.0
+# Viewer-paced timing: slower than debug speed, with extra reading time for
+# concept-heavy steps. Increase TIME_SCALE to slow the whole scene down.
+TIME_SCALE = 1.55
+
+def T(seconds):
+    return seconds * TIME_SCALE
+
+INTRO_WAIT = T(0.9)
+HEADER_IN_TIME = T(0.75)
+INTRO_IN_TIME = T(0.45)
+INTRO_OUT_TIME = T(0.35)
+
+STEP_IN_TIME = T(0.68)
+STEP_OUT_TIME = T(0.42)
+FINAL_TRANSITION_TIME = T(0.75)
+
+# Per-step hold times. Split/combine need more time because they carry the
+# highest cognitive load; call/return can be shorter.
+CALL_HOLD = T(0.95)
+SPLIT_HOLD = T(1.55)
+SUM_HOLD = T(1.35)
+BASE_CASE_HOLD = T(1.15)
+COMBINE_HOLD = T(1.75)
+RETURN_HOLD = T(1.05)
+
+ITEM_TIME = T(0.55)
+FINAL_WAIT = T(2.6)
 
 # Palette
 BG_COLOR = "#0b1020"
@@ -420,14 +441,14 @@ class KaratsubaCleanLayoutScene(Scene):
         return VGroup(panel, meta, title, divider, content)
 
     def swap_stage(self, old_group, new_group):
+        # Do not cross-fade too aggressively. Fading the old step out first
+        # gives the viewer a clean visual reset before the next concept appears.
         if old_group is None:
             self.play(FadeIn(new_group, shift=DOWN * 0.12), run_time=STEP_IN_TIME)
         else:
-            self.play(
-                FadeOut(old_group, shift=UP * 0.12),
-                FadeIn(new_group, shift=DOWN * 0.12),
-                run_time=STEP_IN_TIME,
-            )
+            self.play(FadeOut(old_group, shift=UP * 0.10), run_time=STEP_OUT_TIME)
+            self.wait(T(0.08))
+            self.play(FadeIn(new_group, shift=DOWN * 0.12), run_time=STEP_IN_TIME)
         return new_group
 
     def play_call_step(self, current, step, index, total):
@@ -436,7 +457,7 @@ class KaratsubaCleanLayoutScene(Scene):
         hint = self.make_text_line("Check size: split again or finish directly.", font_size=22, color=TEXT_DIM)
         view = self.build_step_view(step, index, total, "Enter recursive call", color, expr, hint)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD)
+        self.wait(CALL_HOLD)
         return current
 
     def play_base_case_step(self, current, step, index, total):
@@ -453,7 +474,7 @@ class KaratsubaCleanLayoutScene(Scene):
         hint = self.make_text_line("This branch is small enough for direct multiplication.", font_size=21, color=TEXT_DIM)
         view = self.build_step_view(step, index, total, "Base case", color, row, hint)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD + 0.05)
+        self.wait(BASE_CASE_HOLD)
         return current
 
     def play_return_step(self, current, step, index, total):
@@ -477,7 +498,7 @@ class KaratsubaCleanLayoutScene(Scene):
         note = self.make_text_line("Send this result back to the parent frame.", font_size=21, color=TEXT_DIM)
         view = self.build_step_view(step, index, total, "Return", color, bubble_group, note)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD)
+        self.wait(RETURN_HOLD)
         return current
 
     def play_sum_step(self, current, step, index, total):
@@ -495,7 +516,7 @@ class KaratsubaCleanLayoutScene(Scene):
         target = self.make_value_box("next recursive call", f"{step['sum_a']} × {step['sum_b']}", color, width=5.2, value_font_size=26)
         view = self.build_step_view(step, index, total, "Build the middle product", color, eq1, eq2, target)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD)
+        self.wait(SUM_HOLD)
         return current
 
     def play_split_step(self, current, step, index, total):
@@ -528,7 +549,7 @@ class KaratsubaCleanLayoutScene(Scene):
 
         view = self.build_step_view(step, index, total, "Split into high and low parts", color, top_row, split_row, formula)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD)
+        self.wait(SPLIT_HOLD)
         return current
 
     def play_combine_step(self, current, step, index, total):
@@ -552,7 +573,7 @@ class KaratsubaCleanLayoutScene(Scene):
         )
         view = self.build_step_view(step, index, total, "Combine recursive results", color, z_row, fix, combine)
         current = self.swap_stage(current, view)
-        self.wait(STEP_HOLD)
+        self.wait(COMBINE_HOLD)
         return current
 
     def make_final_view(self, a_str, b_str, result_str):
@@ -601,15 +622,16 @@ class KaratsubaCleanLayoutScene(Scene):
         result_str = little_endian_to_string(result)
 
         header = self.make_header(a_str, b_str)
-        self.play(FadeIn(header, shift=DOWN * 0.18), run_time=0.75)
+        self.play(FadeIn(header, shift=DOWN * 0.18), run_time=HEADER_IN_TIME)
 
         self.stage_top_y = header.get_bottom()[1] - self.HEADER_STAGE_GAP
+        self.wait(T(0.25))
 
         intro = self.make_pill("bounded layout: one step, one card, no overlap", ACCENT_INFO, font_size=17)
         intro.next_to(header, DOWN, buff=0.25)
-        self.play(FadeIn(intro, shift=UP * 0.08), run_time=0.4)
+        self.play(FadeIn(intro, shift=UP * 0.08), run_time=INTRO_IN_TIME)
         self.wait(INTRO_WAIT)
-        self.play(FadeOut(intro, shift=UP * 0.08), run_time=0.25)
+        self.play(FadeOut(intro, shift=UP * 0.08), run_time=INTRO_OUT_TIME)
 
         current = None
         total = len(steps)
@@ -632,7 +654,7 @@ class KaratsubaCleanLayoutScene(Scene):
         self.play(
             FadeOut(current, shift=UP * 0.12),
             FadeIn(final_view, shift=DOWN * 0.12),
-            run_time=0.6,
+            run_time=FINAL_TRANSITION_TIME,
         )
         self.wait(FINAL_WAIT)
 
