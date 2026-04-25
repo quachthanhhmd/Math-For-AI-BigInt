@@ -230,8 +230,8 @@ Theo định lý Master, nghiệm xấp xỉ là:
 $$
 T(n) = O(n^{\log_2 3}) \approx O(n^{1.585})
 $$
-
-Xem giải thích chi tiết hơn ở: [`docs/index_z1.md`](docs/index_z1.md)
+m
+Xem giải thích chi tiết hơn ở: [`docs/index_z1.md`](docs/index_m.md)
 
 ---
 
